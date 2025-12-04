@@ -13,6 +13,7 @@
     "imap-simple": "^1.6.3",
     "jsonwebtoken": "^9.0.0",
     "mailparser": "^3.9.0",
+    "multer": "^2.0.2",
     "nodemailer": "^7.0.11"
   }
 }

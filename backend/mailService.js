@@ -74,6 +74,29 @@ async function fetchMessage(user, password, uid, mailbox = 'INBOX') {
   }
 }
 
+// new: retrieve a single attachment (by index) for a message (returns { filename, contentType, size, content: Buffer })
+async function getAttachment(user, password, uid, mailbox = 'INBOX', index = 0) {
+  const client = await connectImap(user, password);
+  try {
+    await client.openBox(mailbox);
+    const fetchOptions = { bodies: [''], markSeen: false };
+    const results = await client.search([['UID', uid]], fetchOptions);
+    if (!results || results.length === 0) return null;
+    const raw = results[0].parts[0].body;
+    const parsed = await simpleParser(raw);
+    const attach = (parsed.attachments || [])[index];
+    if (!attach) return null;
+    return {
+      filename: attach.filename || ('attachment-' + index),
+      contentType: attach.contentType || 'application/octet-stream',
+      size: attach.size || (attach.content ? attach.content.length : 0),
+      content: attach.content // Buffer
+    };
+  } finally {
+    client.end();
+  }
+}
+
 async function saveToSentFolder(user, password, rawMessage) {
   const client = await connectImap(user, password);
   try {
@@ -247,7 +270,8 @@ async function listMessagesFromBox(user, password, mailboxName) {
     }
 
     const fetchOptions = {
-      bodies: ['HEADER.FIELDS (FROM TO SUBJECT DATE)'],
+      // request the custom X-MOVED-AT header so clients can know when it was moved
+      bodies: ['HEADER.FIELDS (FROM TO SUBJECT DATE X-MOVED-AT)'],
       struct: true
     };
 
@@ -266,6 +290,8 @@ async function listMessagesFromBox(user, password, mailboxName) {
         to: header.body.to?.[0] || '',
         subject: header.body.subject?.[0] || '',
         date: header.body.date?.[0] || '',
+        // expose custom header (imap headers are case-insensitive; header.body keys may be lowercased)
+        xMovedAt: header.body['x-moved-at']?.[0] || header.body['x-moved-at'] || header.body['x-moved-at']?.[0] || null,
         seen,
         flags
       };
@@ -466,4 +492,158 @@ async function deleteMessage(user, password, mailboxName, uid) {
   }
 }
 
-module.exports = { listMessages, fetchMessage, sendMail, listAllMessages, searchMessagesByFrom, listMessagesFromBox, saveToSentFolder, saveDraft, deleteMessage };
+// new: move message (by UID) from its mailbox into a Trash-like folder (best-effort)
+// Try IMAP COPY (preserves headers/flags) first; if not supported/fails, fall back to appending modified raw with X-MOVED-AT header.
+async function moveToTrash(user, password, uid, sourceMailbox = 'INBOX') {
+  const client = await connectImap(user, password);
+  try {
+    // open source mailbox to read raw (and ensure UID exists)
+    await client.openBox(sourceMailbox);
+    const fetchOptions = { bodies: [''], markSeen: false };
+    const results = await client.search([['UID', uid]], fetchOptions);
+    if (!results || results.length === 0) return { moved: false, reason: 'not_found' };
+    const raw = results[0].parts[0].body;
+
+    // candidate trash folders
+    const possibleTrashFolders = ["Trash", "Deleted Items", "Deleted", "Bin", "INBOX.Trash", "INBOX.Deleted", "TRASH"];
+
+    // find or create a target trash folder
+    let target = null;
+    try {
+      for (const f of possibleTrashFolders) {
+        try {
+          await client.openBox(f, false);
+          target = f;
+          break;
+        } catch (e) {
+          // try next
+        }
+      }
+      if (!target) {
+        const candidate = possibleTrashFolders[0];
+        if (client.imap && typeof client.imap.addBox === 'function') {
+          await new Promise((resolve, reject) => client.imap.addBox(candidate, (err) => err ? reject(err) : resolve()));
+          await client.openBox(candidate, false);
+          target = candidate;
+        }
+      }
+    } catch (e) {
+      target = null;
+    }
+
+    // If we couldn't locate or create a Trash mailbox, do NOT delete the original.
+    if (!target) {
+      return { moved: false, reason: 'no_trash' };
+    }
+
+    // Append modified raw with X-MOVED-AT and X-ORIGINAL-MAILBOX headers (reliable path)
+    try {
+      const movedHeader = `X-MOVED-AT: ${new Date().toISOString()}\r\nX-ORIGINAL-MAILBOX: ${sourceMailbox}\r\n`;
+      const modifiedRaw = movedHeader + raw;
+
+      await new Promise((resolve, reject) => {
+        try {
+          const appendFn = (client.imap && typeof client.imap.append === 'function')
+            ? client.imap.append.bind(client.imap)
+            : (typeof client.append === 'function')
+              ? client.append.bind(client)
+              : null;
+          if (!appendFn) return reject(new Error('no append function on IMAP client'));
+          appendFn(modifiedRaw, { mailbox: target }, (err) => err ? reject(err) : resolve());
+        } catch (err) { reject(err); }
+      });
+
+      // only after successful append, mark original as Deleted + expunge (best-effort)
+      try {
+        await client.openBox(sourceMailbox, false);
+        await new Promise((resolve, reject) => client.imap.addFlags(uid, '\\Deleted', (err) => err ? reject(err) : resolve()));
+        await new Promise((resolve, reject) => client.imap.expunge((err) => err ? reject(err) : resolve()));
+      } catch (e) {
+        // ignore deletion failure but we've already appended to Trash
+      }
+
+      return { moved: true, target, method: 'append' };
+    } catch (appendErr) {
+      // append failed
+      return { moved: false, reason: 'append_failed', error: appendErr && appendErr.message };
+    }
+  } finally {
+    client.end();
+  }
+}
+
+// new: restore message from Trash back to original mailbox (or INBOX)
+// - reads raw from trash mailbox by UID, strips X-MOVED-AT / X-ORIGINAL-MAILBOX headers,
+//   appends sanitized raw into original mailbox (or INBOX), then deletes the trash entry.
+async function restoreFromTrash(user, password, uid, trashMailbox = 'Trash') {
+  const client = await connectImap(user, password);
+  try {
+    await client.openBox(trashMailbox);
+    const fetchOptions = { bodies: [''], markSeen: false };
+    const results = await client.search([['UID', uid]], fetchOptions);
+    if (!results || results.length === 0) return { restored: false, reason: 'not_found' };
+    const raw = results[0].parts[0].body;
+
+    // extract original mailbox header if present
+    const m = (raw || '').match(/X-ORIGINAL-MAILBOX:\s*(.+)/i);
+    const originalMailbox = m ? m[1].trim() : null;
+    const targetMailbox = originalMailbox || 'INBOX';
+
+    // remove our helper headers before appending
+    let sanitized = raw.replace(/^X-MOVED-AT:.*\r?\n/ig, '').replace(/^X-ORIGINAL-MAILBOX:.*\r?\n/ig, '');
+
+    // ensure destination exists / open writable
+    try {
+      await client.openBox(targetMailbox, false);
+    } catch (err) {
+      // try to create if possible
+      try {
+        if (client.imap && typeof client.imap.addBox === 'function') {
+          await new Promise((resolve, reject) => client.imap.addBox(targetMailbox, (e) => e ? reject(e) : resolve()));
+          await client.openBox(targetMailbox, false);
+        } else {
+          // fallback: try opening INBOX
+          await client.openBox('INBOX', false);
+        }
+      } catch (e) {
+        // fallback to INBOX
+        try { await client.openBox('INBOX', false); } catch (_) {}
+      }
+    }
+
+    // append sanitized raw into target mailbox
+    await new Promise((resolve, reject) => {
+      try {
+        const appendFn = (client.imap && typeof client.imap.append === 'function')
+          ? client.imap.append.bind(client.imap)
+          : (typeof client.append === 'function')
+            ? client.append.bind(client)
+            : null;
+        if (!appendFn) return reject(new Error('no append function on IMAP client'));
+        appendFn(sanitized, { mailbox: targetMailbox }, (err) => err ? reject(err) : resolve());
+      } catch (err) { reject(err); }
+    });
+
+    // remove the original message in trash (mark deleted + expunge)
+    try {
+      await client.openBox(trashMailbox, false);
+      await new Promise((resolve, reject) => {
+        client.imap.addFlags(uid, '\\Deleted', (err) => err ? reject(err) : resolve());
+      });
+      await new Promise((resolve, reject) => {
+        client.imap.expunge((err) => err ? reject(err) : resolve());
+      });
+    } catch (e) {
+      // ignore deletion failure
+    }
+
+    return { restored: true, target: targetMailbox };
+  } finally {
+    client.end();
+  }
+}
+
+module.exports = {
+  listMessages, fetchMessage, sendMail, listAllMessages, searchMessagesByFrom, listMessagesFromBox,
+  saveToSentFolder, saveDraft, deleteMessage, getAttachment, moveToTrash, restoreFromTrash
+};

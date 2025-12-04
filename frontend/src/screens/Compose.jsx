@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import ReactDOM from 'react-dom'; // <-- added for portal
-import { sendMail, saveDraft as saveDraftAPI } from '../api';
+import { sendMail, saveDraft as saveDraftAPI, scheduleMail } from '../api';
 
 export default function Compose({ onSent, onCancel, noPortal = false, initialData = null }) {
   const [recipients, setRecipients] = useState([]); // array of emails/names
@@ -10,6 +10,9 @@ export default function Compose({ onSent, onCancel, noPortal = false, initialDat
   const [attachments, setAttachments] = useState([]); // {file, name, size}
   const [err, setErr] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendLater, setSendLater] = React.useState(false);
+  const [scheduledAt, setScheduledAt] = React.useState(''); // ISO-like from input
+  const [scheduling, setScheduling] = React.useState(false);
   const fileRef = useRef();
   const editorRef = useRef(null); // <-- added editor ref
 
@@ -229,24 +232,46 @@ export default function Compose({ onSent, onCancel, noPortal = false, initialDat
       return;
     }
 
+    // If user chose "Send later" and provided a datetime, call schedule endpoint
+    if (sendLater && scheduledAt) {
+      setScheduling(true);
+      try {
+        const to = finalRecipients.join(', ');
+        const html = textToHtml(body);
+        const r = await scheduleMail({ to, subject, text: body, html, sendAt: new Date(scheduledAt).toISOString() });
+        if (r && r.success) {
+          // clear local state/draft and notify parent
+          setRecipients([]);
+          setToInput('');
+          setSubject('');
+          setBody('');
+          setAttachments([]);
+          clearLocalDraft();
+          onSent && onSent();
+        } else {
+          setErr(r && r.error ? r.error : 'Schedule failed');
+        }
+      } catch (ex) {
+        setErr(ex && ex.message ? ex.message : 'Schedule error');
+      } finally {
+        setScheduling(false);
+      }
+      return;
+    }
+
+    // immediate send (existing behavior)
     setSending(true);
     try {
-      // Prototype: attachments are not uploaded - backend needs to support multipart.
       const to = finalRecipients.join(', ');
-
-      // convert body to simple sanitized HTML for message.html
       const html = textToHtml(body);
-
-      // send text + html to backend; nodemailer will use html if present
       const r = await sendMail({ to, subject, text: body, html });
       if (r.success) {
-        // clear state
         setRecipients([]);
         setToInput('');
         setSubject('');
         setBody('');
         setAttachments([]);
-        clearLocalDraft();           // remove saved draft on success
+        clearLocalDraft();
         onSent && onSent();
       } else {
         setErr(r.error || 'Send failed');
@@ -421,11 +446,31 @@ export default function Compose({ onSent, onCancel, noPortal = false, initialDat
               Discard
             </button>
 
-            <button style={s.sendBtn} onClick={submit} disabled={sending}>{sending ? 'Sending...' : 'Send'}</button>
-          </div>
-        </div>
+            <div style={{display:'flex', alignItems:'center', gap:8}}>
+              <label style={{display:'flex', alignItems:'center', gap:8, color:'#9aa6b2', fontSize:13}}>
+                <input type="checkbox" checked={sendLater} onChange={e=>setSendLater(e.target.checked)} />
+                Send later
+              </label>
+              <button style={s.sendBtn} onClick={submit} disabled={sending || scheduling}>
+                {scheduling ? 'Scheduling...' : (sending ? 'Sending...' : 'Send')}
+              </button>
+            </div>
+           </div>
+         </div>
 
-        <form style={s.form} onSubmit={submit}>
+         <form style={s.form} onSubmit={submit}>
+          {sendLater && (
+            <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:4}}>
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={e=>setScheduledAt(e.target.value)}
+                style={{padding:8, borderRadius:6, border:'1px solid rgba(255,255,255,0.03)', background:'#081217', color:'#dff3ff'}}
+              />
+              <div style={{color:'#9aa6b2', fontSize:12}}>Time is local; timezone will be preserved on schedule.</div>
+            </div>
+          )}
+
           <div style={s.toRow}>
             <div style={s.label}>To:</div>
             <div style={s.chips}>
@@ -453,7 +498,6 @@ export default function Compose({ onSent, onCancel, noPortal = false, initialDat
           />
 
           <div className="topToolbar" style={s.topToolbar} role="toolbar" aria-label="Formatting toolbar">
-            <button type="button" style={s.iconBtn} title="Attach" onClick={() => fileRef.current && fileRef.current.click()}>📎</button>
             <div style={{width:1, height:20, background:'rgba(255,255,255,0.03)'}} />
             <button type="button" style={s.iconBtn} title="Bold" onClick={toggleBold}><strong>B</strong></button>
             <button type="button" style={s.iconBtn} title="Italic" onClick={toggleItalic}><em>I</em></button>

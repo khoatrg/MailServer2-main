@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { listMessages, getMessage } from '../api';
+import { listMessages, getMessage, moveToTrash } from '../api';
 
-export default function Inbox({ onOpenCompose, onOpenMessage, seenOverrides }) {
+export default function Inbox({ onOpenCompose, onOpenMessage, seenOverrides, onNavigate }) {
   const [messages, setMessages] = useState([]);
   const [selected, setSelected] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,6 +100,11 @@ export default function Inbox({ onOpenCompose, onOpenMessage, seenOverrides }) {
   }, [searchQuery, showSearch]);
 
   const listToRender = (searchResults !== null || searching || showSearch) ? (searchResults || []) : messages;
+  const PAGE_SIZE = 7;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [messages.length, searchResults, searching, showSearch]);
+  const totalPages = Math.max(1, Math.ceil((listToRender && listToRender.length) / PAGE_SIZE));
+  const paginated = (listToRender || []).slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function avatarFor(from) {
     if (!from) return '';
@@ -121,11 +126,61 @@ export default function Inbox({ onOpenCompose, onOpenMessage, seenOverrides }) {
     return d.toLocaleDateString();
   }
 
+  async function deleteItem(e, m) {
+    e.stopPropagation();
+    try {
+      const composite = m.mailbox ? `${m.mailbox}::${m.uid}` : m.uid;
+      await moveToTrash(composite);
+      await load();
+    } catch (err) {
+      console.warn('move to trash failed', err && err.message);
+    }
+  }
+
+  // dropdown state
+  const [folderOpen, setFolderOpen] = useState(false);
+  const folderRef = useRef(null);
+  useEffect(() => {
+    function onDoc(e) {
+      if (!folderRef.current) return;
+      if (!folderRef.current.contains(e.target)) setFolderOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  function goFolder(target) {
+    setFolderOpen(false);
+    if (onNavigate) onNavigate(target);
+  }
+
   return (
     <div className="inbox-screen">
       <header className="inbox-header" style={{display:'flex', alignItems:'center', gap:12}}>
-        <h1 style={{margin:0}}>Inbox</h1>
-        <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:8}}>
+        {/* custom themed folder dropdown */}
+        <div className="folder-dropdown" ref={folderRef}>
+          <button className="trigger" onClick={() => setFolderOpen(s => !s)} aria-haspopup="menu" aria-expanded={folderOpen}>
+            Inbox <span className="caret">▾</span>
+          </button>
+          {folderOpen && (
+            <div className="menu" role="menu">
+              <div className="item" role="menuitem" onClick={() => goFolder('inbox')}>Inbox</div>
+              <div className="item" role="menuitem" onClick={() => goFolder('scheduled')}>Scheduled</div>
+              <div className="item" role="menuitem" onClick={() => goFolder('trash')}>Trash</div>
+            </div>
+          )}
+        </div>
+
+        <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:12}}>
+          {/* pagination next to search */}
+          <div>
+            <div className="pagination-inline" role="navigation" aria-label="Pagination">
+              <button className="pagination-btn" onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page<=1}>Prev</button>
+              <div className="pagination-info">{page} / {totalPages}</div>
+              <button className="pagination-btn" onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page>=totalPages}>Next</button>
+            </div>
+          </div>
+
           {!showSearch ? (
             <button
               className="search-btn"
@@ -154,7 +209,7 @@ export default function Inbox({ onOpenCompose, onOpenMessage, seenOverrides }) {
 
       <ul className="message-list">
         {(!listToRender || listToRender.length === 0) && <li className="empty">{searching ? 'Searching…' : 'No messages'}</li>}
-        {listToRender.map(m => {
+        {paginated.map(m => {
            const isSeen = !!(m.seen || (seenOverrides && seenOverrides[m.uid]));
            return (
             <li key={`${m.mailbox||'INBOX'}::${m.uid}`} className="message-item" onClick={() => open(m.mailbox ? `${m.mailbox}::${m.uid}` : m.uid)}>
@@ -176,12 +231,14 @@ export default function Inbox({ onOpenCompose, onOpenMessage, seenOverrides }) {
                   <span className="preview-text">{m.subject ? (m.subject + ' — ') : ''}</span>
                 </div>
               </div>
-            </li>
+
+             <div className="item-actions" onClick={e=>e.stopPropagation()}>
+               <button className="list-delete-btn" title="Move to Trash" onClick={(e)=>deleteItem(e, m)}>🗑</button>
+             </div>
+             </li>
            );
          })}
        </ul>
-
-      {/* floating-compose removed from here; rendered globally in App.jsx */}
     </div>
   );
 }

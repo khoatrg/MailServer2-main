@@ -136,29 +136,55 @@ export default function Drafts({ onOpenMessage, seenOverrides }) {
   }
 
   const listToRender = (searchResults !== null || searching || showSearch) ? (searchResults || []) : messages;
+  const PAGE_SIZE = 7;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [messages.length, searchResults, searching, showSearch]);
+  const totalPages = Math.max(1, Math.ceil((listToRender && listToRender.length) / PAGE_SIZE));
+  const paginated = (listToRender || []).slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  async function deleteDraft(e, m) {
+    e.stopPropagation();
+    try {
+      await deleteDraftMessage(m.mailbox || m.mailbox, m.uid);
+      setMessages(prev => prev.filter(x => !(String(x.uid) === String(m.uid) && x.mailbox === m.mailbox)));
+    } catch (err) {
+      console.warn('deleteDraft failed', err && err.message);
+    }
+  }
 
   return (
     <div className="inbox-screen">
       <header className="inbox-header">
         <h1>Drafts</h1>
-        <div style={{marginLeft:'auto', display:'flex', alignItems:'center'}}>
-          {!showSearch ? (
-            <button style={{background:'transparent', border:'1px solid rgba(255,255,255,0.03)', padding:8, borderRadius:8, color:'#dff3ff', cursor:'pointer'}} onClick={() => { setShowSearch(true); setTimeout(()=>inputRef.current && inputRef.current.focus(),50); }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.35-4.35" stroke="#9aa6b2" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><circle cx="11" cy="11" r="6" stroke="#9aa6b2" strokeWidth="1.6"/></svg>
-            </button>
-          ) : (
-            <div style={{display:'flex', alignItems:'center', gap:8, padding:'4px 6px', background:'#071015', border:'1px solid rgba(255,255,255,0.03)', borderRadius:8}}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.35-4.35" stroke="#9aa6b2" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><circle cx="11" cy="11" r="6" stroke="#9aa6b2" strokeWidth="1.6"/></svg>
-              <input ref={inputRef} value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} onKeyDown={onSearchKey} placeholder="Search subject, email, or content" style={{padding:'8px 10px', borderRadius:6, border:'none', background:'transparent', color:'#dff3ff', outline:'none', width:300, maxWidth:'40vw'}} />
-              <button onClick={()=>{ setShowSearch(false); setSearchQuery(''); setSearchResults(null); }} title="Close search" style={{background:'transparent', border:'none', color:'#9aa6b2', cursor:'pointer'}}>✕</button>
+
+        <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:12}}>
+          <div>
+            <div className="pagination-inline" role="navigation" aria-label="Pagination">
+              <button className="pagination-btn" onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page<=1}>Prev</button>
+              <div className="pagination-info">{page} / {totalPages}</div>
+              <button className="pagination-btn" onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page>=totalPages}>Next</button>
             </div>
-          )}
+          </div>
+
+          <div style={{marginLeft:'auto', display:'flex', alignItems:'center'}}>
+            {!showSearch ? (
+              <button style={{background:'transparent', border:'1px solid rgba(255,255,255,0.03)', padding:8, borderRadius:8, color:'#dff3ff', cursor:'pointer'}} onClick={() => { setShowSearch(true); setTimeout(()=>inputRef.current && inputRef.current.focus(),50); }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.35-4.35" stroke="#9aa6b2" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><circle cx="11" cy="11" r="6" stroke="#9aa6b2" strokeWidth="1.6"/></svg>
+              </button>
+            ) : (
+              <div style={{display:'flex', alignItems:'center', gap:8, padding:'4px 6px', background:'#071015', border:'1px solid rgba(255,255,255,0.03)', borderRadius:8}}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.35-4.35" stroke="#9aa6b2" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><circle cx="11" cy="11" r="6" stroke="#9aa6b2" strokeWidth="1.6"/></svg>
+                <input ref={inputRef} value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} onKeyDown={onSearchKey} placeholder="Search subject, email, or content" style={{padding:'8px 10px', borderRadius:6, border:'none', background:'transparent', color:'#dff3ff', outline:'none', width:300, maxWidth:'40vw'}} />
+                <button onClick={()=>{ setShowSearch(false); setSearchQuery(''); setSearchResults(null); }} title="Close search" style={{background:'transparent', border:'none', color:'#9aa6b2', cursor:'pointer'}}>✕</button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
       <ul className="message-list">
-        {(!listToRender || listToRender.length === 0) && <li className="empty">{searching ? 'Searching…' : 'No drafts'}</li>}
-        {listToRender.map(m => {
+        {(!paginated || paginated.length === 0) && <li className="empty">{searching ? 'Searching…' : 'No drafts'}</li>}
+        {paginated.map(m => {
            const isSeen = !!(m.seen || (seenOverrides && seenOverrides[m.uid]));
            return (
              // use mailbox+uid as key and pass mailbox into open
@@ -181,6 +207,10 @@ export default function Drafts({ onOpenMessage, seenOverrides }) {
                    <span className="preview-text">{m.subject ? (m.subject + ' — ') : ''}</span>
                  </div>
                </div>
+
+              <div className="item-actions" onClick={e=>e.stopPropagation()}>
+                <button className="list-delete-btn" title="Delete Draft" onClick={(e)=>deleteDraft(e, m)}>🗑</button>
+              </div>
              </li>
            );
          })}

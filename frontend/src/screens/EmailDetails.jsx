@@ -1,7 +1,8 @@
 import React from 'react';
-import { sendMail, getSentMessages, getMessage } from '../api'; // updated import
+import { sendMail, getSentMessages, getMessage, downloadAttachment } from '../api'; // updated import (removed raw download)
 
-export default function EmailDetails({ message, onBack, onReply, onReplyAll, onForward, onDelete }) {
+
+export default function EmailDetails({ message, onBack, onReply, onReplyAll, onForward, onDelete, onNavigate }) {
 	if (!message) return null;
 
 	const fromText = message.from || '';
@@ -156,9 +157,51 @@ export default function EmailDetails({ message, onBack, onReply, onReplyAll, onF
 	return (
 		<div className="details-screen">
 			<div className="details-header">
-				<button className="back-btn" onClick={onBack} aria-label="Back">←</button>
+				<button className="back-btn" onClick={() => { if (onBack) return onBack(); if (onNavigate) return onNavigate('inbox'); }}>←</button>
 				<div className="details-actions">
-					<button title="Download" onClick={()=>alert('Download not implemented in prototype')} aria-label="Download">⬇</button>
+					<button title="Print" aria-label="Print" onClick={async ()=>{
+						// helper to escape plain text when embedding into HTML
+						function escapeHtml(s='') {
+							return String(s)
+								.replace(/&/g, '&amp;')
+								.replace(/</g, '&lt;')
+								.replace(/>/g, '&gt;')
+								.replace(/"/g, '&quot;')
+								.replace(/'/g, '&#39;');
+						}
+
+						try {
+							const subj = message.subject || '(no subject)';
+							const bodyHtml = message.html ? String(message.html) : `<pre style="white-space:pre-wrap;font-family:inherit">${escapeHtml(message.text || '(no content)')}</pre>`;
+							const metaHtml = `<div style="margin-bottom:10px;color:#444">
+								<div><strong>From:</strong> ${escapeHtml(fromText)}</div>
+								<div><strong>To:</strong> ${escapeHtml(toText)}</div>
+								<div><strong>Date:</strong> ${escapeHtml(dateText)}</div>
+							</div>`;
+
+							const styles = `<style>
+								body{font-family: Arial, Helvetica, sans-serif; padding:20px; color:#000}
+								.subject{font-size:20px;font-weight:700;margin-bottom:8px}
+								hr{margin:18px 0}
+							</style>`;
+
+							const win = window.open('', '_blank');
+							if (!win) throw new Error('Popup blocked');
+							win.document.open();
+							win.document.write(`<html><head><title>${escapeHtml(subj)}</title>${styles}</head><body>
+								<div class="subject">${escapeHtml(subj)}</div>
+								${metaHtml}
+								<hr/>
+								<div class="message-content">${bodyHtml}</div>
+							</body></html>`);
+							win.document.close();
+							win.focus();
+							// wait for resources to load then print
+							win.onload = () => { try { win.print(); } catch(e){} };
+						} catch (err) {
+							alert('Print failed: ' + (err && err.message || ''));
+						}
+					}}>🖨 Print</button>
 					<button title="More" onClick={()=>{}} aria-label="More">⋮</button>
 				</div>
 			</div>
@@ -180,7 +223,6 @@ export default function EmailDetails({ message, onBack, onReply, onReplyAll, onF
 					<button onClick={() => openInlineReply(false)} title="Reply">↩ Reply</button>
 					<button onClick={() => openInlineReply(true)} title="Reply All">⤺ Reply All</button>
 					<button onClick={onForward} title="Forward">⇢ Forward</button>
-					<button className="danger" onClick={onDelete} title="Delete">🗑 Delete</button>
 				</div>
 
 				<div className="details-body">
@@ -240,7 +282,22 @@ export default function EmailDetails({ message, onBack, onReply, onReplyAll, onF
 										<div className="attachment-size">{a.size ? (Math.round(a.size/1024) + ' KB') : (a.contentType || '')}</div>
 									</div>
 									<div className="attachment-actions">
-										<button onClick={()=>alert('Attachment download requires backend support in prototype')}>⬇</button>
+										<button onClick={async ()=> {
+											try {
+												const composite = message.mailbox ? `${message.mailbox}::${message.uid}` : message.uid;
+												const { blob, filename } = await downloadAttachment(composite, i);
+												const url = URL.createObjectURL(blob);
+												const aEl = document.createElement('a');
+												aEl.href = url;
+												aEl.download = filename || (a.filename || 'attachment');
+												document.body.appendChild(aEl);
+												aEl.click();
+												aEl.remove();
+												URL.revokeObjectURL(url);
+											} catch (err) {
+												alert('Download failed: ' + (err && err.message || ''));
+											}
+										}}>⬇</button>
 									</div>
 								</div>
 							))}
