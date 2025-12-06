@@ -154,6 +154,9 @@ export default function EmailDetails({ message, onBack, onReply, onReplyAll, onF
 		setReplyQuoted('');
 	}
 
+	// determine if this message is coming from a Trash-like mailbox
+	const inTrash = !!(message && message.mailbox && String(message.mailbox).toLowerCase().includes('trash'));
+
 	return (
 		<div className="details-screen">
 			<div className="details-header">
@@ -219,11 +222,13 @@ export default function EmailDetails({ message, onBack, onReply, onReplyAll, onF
 				</div>
 
 				{/* inline toolbar placed on top of the email content */}
-				<div className="details-inline-toolbar" role="toolbar" aria-label="Message actions">
-					<button onClick={() => openInlineReply(false)} title="Reply">↩ Reply</button>
-					<button onClick={() => openInlineReply(true)} title="Reply All">⤺ Reply All</button>
-					<button onClick={onForward} title="Forward">⇢ Forward</button>
-				</div>
+				{!inTrash && (
+					<div className="details-inline-toolbar" role="toolbar" aria-label="Message actions">
+						<button onClick={() => openInlineReply(false)} title="Reply">↩ Reply</button>
+						<button onClick={() => openInlineReply(true)} title="Reply All">⤺ Reply All</button>
+						<button onClick={onForward} title="Forward">⇢ Forward</button>
+					</div>
+				)}
 
 				<div className="details-body">
 					{/* if html available, render dangerously; fallback to text */}

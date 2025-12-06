@@ -16,6 +16,8 @@ const upload = multer({ storage: multer.memoryStorage() });
 /* --- scheduled jobs persistence (must be defined before endpoints) --- */
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
+const os = require('os');
 const SCHEDULE_FILE = path.join(__dirname, 'scheduled_jobs.json');
 let scheduledJobs = [];
 
@@ -64,23 +66,425 @@ setInterval(() => { processScheduledJobs().catch(e=>console.error(e)); }, 30 * 1
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES = process.env.JWT_EXPIRES || '8h';
 
-function createToken(email, password) {
-  // Prototype: token contains password - do NOT use in production
-  return jwt.sign({ email, password }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+// ---------- Postgres-backed session store ----------
+const { Pool } = require('pg'); // add PG pool
+const PG_CONN = process.env.DATABASE_URL || (process.env.PGHOST ? undefined : undefined);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || undefined,
+  host: process.env.PGHOST || undefined,
+  user: process.env.PGUSER || undefined,
+  password: process.env.PGPASSWORD || undefined,
+  database: process.env.PGDATABASE || undefined,
+  port: process.env.PGPORT ? Number(process.env.PGPORT) : undefined,
+  ssl: (process.env.PGSSL === 'true') ? { rejectUnauthorized: false } : false,
+  // rely on env for other tuning
+});
+
+// ensure sessions table exists
+(async function ensureSessionsTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        jti TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        password TEXT NOT NULL,
+        exp BIGINT NOT NULL
+      );
+    `);
+
+    // create user_settings table for storing per-account preferences
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_settings (
+        email TEXT PRIMARY KEY,
+        out_of_office BOOLEAN DEFAULT FALSE,
+        out_of_office_reply TEXT DEFAULT '',
+        theme TEXT DEFAULT 'system',    -- 'system' | 'dark' | 'light'
+        app_lock BOOLEAN DEFAULT FALSE
+      );
+    `);
+  } catch (err) {
+    console.error('Could not ensure sessions/user_settings tables:', err && err.stack || err);
+    // allow server to continue; queries will fail if DB not available
+  }
+})();
+
+// helper: parse expiry spec to ms (reuse existing)
+function parseExpiryToMs(spec) {
+  if (!spec) return 0;
+  const num = parseFloat(spec);
+  if (!isNaN(num) && String(spec).match(/^\d+$/)) return num * 1000;
+  const m = /^(\d+)(s|m|h|d)$/.exec(String(spec));
+  if (!m) return 0;
+  const val = Number(m[1]);
+  const unit = m[2];
+  switch (unit) {
+    case 's': return val * 1000;
+    case 'm': return val * 60 * 1000;
+    case 'h': return val * 60 * 60 * 1000;
+    case 'd': return val * 24 * 60 * 60 * 1000;
+    default: return 0;
+  }
 }
 
-function authMiddleware(req, res, next) {
+// DB session helpers
+async function createSessionRow(jti, email, password, expMsTimestamp) {
+  try {
+    await pool.query(
+      'INSERT INTO sessions(jti,email,password,exp) VALUES($1,$2,$3,$4) ON CONFLICT (jti) DO UPDATE SET email = EXCLUDED.email, password = EXCLUDED.password, exp = EXCLUDED.exp',
+      [jti, email, password, expMsTimestamp]
+    );
+  } catch (err) {
+    console.warn('createSessionRow failed', err && (err.message || err));
+  }
+}
+
+async function getSessionRow(jti) {
+  try {
+    const r = await pool.query('SELECT jti,email,password,exp FROM sessions WHERE jti = $1', [jti]);
+    if (!r.rows || r.rows.length === 0) return null;
+    return r.rows[0];
+  } catch (err) {
+    console.warn('getSessionRow failed', err && (err.message || err));
+    return null;
+  }
+}
+
+async function deleteSessionRow(jti) {
+  try {
+    await pool.query('DELETE FROM sessions WHERE jti = $1', [jti]);
+  } catch (err) {
+    console.warn('deleteSessionRow failed', err && (err.message || err));
+  }
+}
+
+async function cleanupExpiredSessions() {
+  try {
+    const now = Date.now();
+    await pool.query('DELETE FROM sessions WHERE exp <= $1', [now]);
+  } catch (err) {
+    console.warn('cleanupExpiredSessions failed', err && (err.message || err));
+  }
+}
+
+// periodic cleanup (hourly)
+setInterval(() => { cleanupExpiredSessions().catch(e => console.error(e)); }, 60 * 60 * 1000);
+
+// --- secure token creation (no password inside JWT) ---
+async function createToken(email, password) {
+  const jti = 'sess_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
+  const token = jwt.sign({ email, jti }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+  const expiryMs = parseExpiryToMs(JWT_EXPIRES) || (8 * 60 * 60 * 1000);
+  const expTs = Date.now() + expiryMs;
+  // persist to DB
+  await createSessionRow(jti, email, password, expTs);
+  return token;
+}
+
+// auth middleware now queries DB for session
+async function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
   const token = auth.slice(7);
+  let payload;
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    req.user = payload;
-    next();
+    payload = jwt.verify(token, JWT_SECRET);
   } catch (err) {
     return res.status(401).json({ error: 'Invalid token' });
   }
+
+  // attach raw token payload for admin checks
+  req.tokenPayload = payload;
+
+  // require jti and email in token
+  const jti = payload && payload.jti;
+  const email = payload && payload.email;
+  if (!jti || !email) return res.status(401).json({ error: 'Invalid token payload' });
+
+  const sess = await getSessionRow(jti);
+  if (!sess || sess.email !== email) {
+    return res.status(401).json({ error: 'Session not found or expired' });
+  }
+  if (sess.exp && Date.now() >= Number(sess.exp)) {
+    // expired -> remove and reject
+    await deleteSessionRow(jti);
+    return res.status(401).json({ error: 'Session expired' });
+  }
+
+  req.user = { email: sess.email, password: sess.password, jti };
+  next();
 }
+
+// ---------- hMailServer COM admin helpers & endpoints ----------
+let ActiveXObject = null;
+try {
+  ActiveXObject = require('winax').ActiveXObject;
+} catch (e) {
+  ActiveXObject = null;
+  console.warn('winax require failed or not available:', e && (e.message || e));
+}
+
+// helper: run a temporary VBScript via cscript.exe and return stdout lines
+async function runVbScriptAndCollect(adminScript) {
+  return new Promise((resolve, reject) => {
+    const tmpDir = os.tmpdir();
+    const fn = path.join(tmpDir, `hmail_admin_${Date.now()}.vbs`);
+    try {
+      fs.writeFileSync(fn, adminScript, 'utf8');
+    } catch (e) {
+      return reject(new Error('Failed to write temp vbs: ' + (e && e.message)));
+    }
+    const cmd = process.env.COMSPEC || 'cscript'; // on Windows, cscript should be available
+    // prefer explicit cscript.exe if on Windows
+    const exe = (process.platform === 'win32') ? 'cscript.exe' : 'cscript';
+    execFile(exe, ['//NoLogo', fn], { windowsHide: true, timeout: 30 * 1000 }, (err, stdout, stderr) => {
+      try { fs.unlinkSync(fn); } catch (_) {}
+      if (err) {
+        const errMsg = (stderr || err.message || '').toString();
+        return reject(new Error('VBScript execution failed: ' + errMsg));
+      }
+      const out = (stdout || '').toString().trim();
+      const lines = out === '' ? [] : out.replace(/\r/g,'').split('\n').map(l => l.trim()).filter(Boolean);
+      resolve(lines);
+    });
+  });
+}
+
+// DB-backed admin permission check (async)
+async function ensureAdminPermission(req, res) {
+  try {
+    const email = req.user && req.user.email;
+    if (!email) {
+      res.status(403).json({ error: 'Forbidden: admin required' });
+      return false;
+    }
+    // Query hm_accounts.accountadminlevel
+    const q = await pool.query('SELECT accountadminlevel FROM hm_accounts WHERE accountaddress = $1 LIMIT 1', [email]);
+    const lvl = q.rows && q.rows[0] ? Number(q.rows[0].accountadminlevel || 0) : 0;
+    if (lvl < 1) {
+      res.status(403).json({ error: 'Forbidden: admin required' });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('ensureAdminPermission DB error', err && (err.message || err));
+    res.status(500).json({ error: 'Internal error checking admin permission' });
+    return false;
+  }
+}
+
+// POST /api/admin/hmail-auth { adminPassword }
+app.post('/api/admin/hmail-auth', authMiddleware, async (req, res) => {
+  if (!(await ensureAdminPermission(req, res))) return;
+  const { adminPassword } = req.body || {};
+  if (!adminPassword) return res.status(400).json({ error: 'adminPassword required' });
+  if (!ActiveXObject) return res.status(500).json({ error: 'Server does not support COM (winax not installed or not Windows)' });
+
+  try {
+    const obApp = new ActiveXObject('hMailServer.Application');
+    obApp.Authenticate('Administrator', adminPassword);
+    // If no exception, auth succeeded
+    return res.json({ success: true });
+  } catch (err) {
+    console.warn('hmail auth failed', err && (err.message || err));
+    return res.status(401).json({ error: 'hMailServer authentication failed' });
+  }
+});
+
+// POST /api/admin/accounts { adminPassword } -> returns list of account addresses
+app.post('/api/admin/accounts', authMiddleware, async (req, res) => {
+  if (!(await ensureAdminPermission(req, res))) return;
+  const { adminPassword } = req.body || {};
+  if (!adminPassword) return res.status(400).json({ error: 'adminPassword required' });
+
+  // Use winax when available
+  if (ActiveXObject) {
+    try {
+      const obApp = new ActiveXObject('hMailServer.Application');
+      obApp.Authenticate('Administrator', adminPassword);
+      const out = [];
+      const domains = obApp.Domains;
+      for (let i = 0; i < domains.Count; i++) {
+        const dom = domains.Item(i);
+        const accounts = dom.Accounts;
+        for (let j = 0; j < accounts.Count; j++) {
+          const a = accounts.Item(j);
+          out.push({ address: a.Address, domain: dom.Name });
+        }
+      }
+      return res.json({ success: true, accounts: out });
+    } catch (err) {
+      console.error('admin/accounts (winax) error', err && (err.message || err));
+      return res.status(500).json({ error: 'Failed to list accounts (COM error or invalid admin password)' });
+    }
+  }
+
+  // Fallback: run VBScript via cscript.exe and parse output (each line: address|domain)
+  try {
+    const vb = `
+On Error Resume Next
+Set obApp = CreateObject("hMailServer.Application")
+obApp.Authenticate "Administrator", "${String(adminPassword).replace(/"/g,'""')}"
+If Err.Number <> 0 Then
+  WScript.StdErr.Write "AUTH_FAILED"
+  WScript.Quit 1
+End If
+Set domains = obApp.Domains
+For i = 0 To domains.Count - 1
+  Set dom = domains.Item(i)
+  Set accounts = dom.Accounts
+  For j = 0 To accounts.Count - 1
+    Set a = accounts.Item(j)
+    WScript.Echo a.Address & "|" & dom.Name
+  Next
+Next
+`;
+    const lines = await runVbScriptAndCollect(vb);
+    const accounts = lines.map(l => {
+      const parts = l.split('|');
+      return { address: parts[0] || l, domain: parts[1] || '' };
+    });
+    return res.json({ success: true, accounts });
+  } catch (e) {
+    console.error('admin/accounts (vbs) error', e && (e.message || e));
+    return res.status(500).json({ error: 'Failed to list accounts (cscript fallback failed): ' + (e && e.message) });
+  }
+});
+
+// POST /api/admin/account/:addr/password { adminPassword, newPassword }
+app.post('/api/admin/account/:addr/password', authMiddleware, async (req, res) => {
+  if (!(await ensureAdminPermission(req, res))) return;
+  const { adminPassword, newPassword } = req.body || {};
+  const addr = req.params.addr;
+  if (!adminPassword || !newPassword) return res.status(400).json({ error: 'adminPassword and newPassword required' });
+
+  // winax path
+  if (ActiveXObject) {
+    try {
+      const obApp = new ActiveXObject('hMailServer.Application');
+      obApp.Authenticate('Administrator', adminPassword);
+      const atIdx = addr.indexOf('@');
+      if (atIdx === -1) return res.status(400).json({ error: 'invalid address' });
+      const domainName = addr.slice(atIdx + 1);
+      const domain = obApp.Domains.ItemByName(domainName);
+      if (!domain) return res.status(404).json({ error: 'domain not found' });
+      const account = domain.Accounts.ItemByAddress(addr);
+      if (!account) return res.status(404).json({ error: 'account not found' });
+      account.Password = newPassword;
+      account.Save();
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('admin change password (winax) failed', err && (err.message || err));
+      return res.status(500).json({ error: 'Failed to change password (COM error or invalid admin credentials)' });
+    }
+  }
+
+  // VBScript fallback
+  try {
+    // escape quotes in address and password
+    const escAdmin = String(adminPassword).replace(/"/g,'""');
+    const escAddr = String(addr).replace(/"/g,'""');
+    const escNew = String(newPassword).replace(/"/g,'""');
+    const vb = `
+On Error Resume Next
+Set obApp = CreateObject("hMailServer.Application")
+obApp.Authenticate "Administrator", "${escAdmin}"
+If Err.Number <> 0 Then
+  WScript.StdErr.Write "AUTH_FAILED"
+  WScript.Quit 1
+End If
+Dim obDomain
+Set obDomain = obApp.Domains.ItemByName("${escAddr.split('@').slice(1).join('@')}")
+If Err.Number <> 0 Or IsNull(obDomain) Then
+  WScript.StdErr.Write "DOMAIN_NOT_FOUND"
+  WScript.Quit 2
+End If
+Dim obAccount
+Set obAccount = obDomain.Accounts.ItemByAddress("${escAddr}")
+If Err.Number <> 0 Or IsNull(obAccount) Then
+  WScript.StdErr.Write "ACCOUNT_NOT_FOUND"
+  WScript.Quit 3
+End If
+obAccount.Password = "${escNew}"
+obAccount.Save
+WScript.Echo "OK"
+`;
+    const lines = await runVbScriptAndCollect(vb);
+    if (lines.length && lines[0] === 'OK') return res.json({ success: true });
+    return res.status(500).json({ error: 'VBScript did not report success' });
+  } catch (e) {
+    console.error('admin change password (vbs) error', e && (e.message || e));
+    return res.status(500).json({ error: 'Failed to change password (cscript fallback failed): ' + (e && e.message) });
+  }
+});
+
+// --- new: DELETE /api/admin/account/:addr { adminPassword } ---
+app.delete('/api/admin/account/:addr', authMiddleware, async (req, res) => {
+  if (!(await ensureAdminPermission(req, res))) return;
+  const { adminPassword } = req.body || {};
+  const addr = req.params.addr;
+  if (!adminPassword) return res.status(400).json({ error: 'adminPassword required' });
+  if (!addr) return res.status(400).json({ error: 'address required' });
+
+  // winax path
+  if (ActiveXObject) {
+    try {
+      const obApp = new ActiveXObject('hMailServer.Application');
+      obApp.Authenticate('Administrator', adminPassword);
+
+      const atIdx = addr.indexOf('@');
+      if (atIdx === -1) return res.status(400).json({ error: 'invalid address' });
+      const domainName = addr.slice(atIdx + 1);
+
+      const domain = obApp.Domains.ItemByName(domainName);
+      if (!domain) return res.status(404).json({ error: 'domain not found' });
+
+      const account = domain.Accounts.ItemByAddress(addr);
+      if (!account) return res.status(404).json({ error: 'account not found' });
+
+      // delete by DBID (as VB code)
+      domain.Accounts.DeleteByDBID(account.ID);
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('admin delete account (winax) failed', err && (err.message || err));
+      return res.status(500).json({ error: 'Failed to delete account (COM error or invalid admin credentials)' });
+    }
+  }
+
+  // VBScript fallback
+  try {
+    const escAdmin = String(adminPassword).replace(/"/g,'""');
+    const escAddr = String(addr).replace(/"/g,'""');
+    const vb = `
+On Error Resume Next
+Set obApp = CreateObject("hMailServer.Application")
+obApp.Authenticate "Administrator", "${escAdmin}"
+If Err.Number <> 0 Then
+  WScript.StdErr.Write "AUTH_FAILED"
+  WScript.Quit 1
+End If
+Dim obDomain
+Set obDomain = obApp.Domains.ItemByName("${escAddr.split('@').slice(1).join('@')}")
+If Err.Number <> 0 Or IsNull(obDomain) Then
+  WScript.StdErr.Write "DOMAIN_NOT_FOUND"
+  WScript.Quit 2
+End If
+Dim obAccount
+Set obAccount = obDomain.Accounts.ItemByAddress("${escAddr}")
+If Err.Number <> 0 Or IsNull(obAccount) Then
+  WScript.StdErr.Write "ACCOUNT_NOT_FOUND"
+  WScript.Quit 3
+End If
+obDomain.Accounts.DeleteByDBID obAccount.ID
+WScript.Echo "OK"
+`;
+    const lines = await runVbScriptAndCollect(vb);
+    if (lines.length && lines[0] === 'OK') return res.json({ success: true });
+    return res.status(500).json({ error: 'VBScript did not report success' });
+  } catch (e) {
+    console.error('admin delete account (vbs) error', e && (e.message || e));
+    return res.status(500).json({ error: 'Failed to delete account (cscript fallback failed): ' + (e && e.message) });
+  }
+});
 
 // POST /api/login { email, password }
 app.post('/api/login', async (req, res) => {
@@ -92,14 +496,21 @@ app.post('/api/login', async (req, res) => {
     await imap.connect({
       imap: {
         user: email,
-        password,
+        password: password,
         host: process.env.IMAP_HOST || 'localhost',
         port: parseInt(process.env.IMAP_PORT || '143', 10),
         tls: (process.env.IMAP_TLS === 'true')
       }
     }).then(conn => conn.end());
-    const token = createToken(email, password);
-    return res.json({ token });
+
+    // createToken is async — await it and handle errors
+    try {
+      const token = await createToken(email, password);
+      return res.json({ token });
+    } catch (tkErr) {
+      console.error('createToken failed', tkErr && (tkErr.stack || tkErr));
+      return res.status(500).json({ error: 'Failed to create session token' });
+    }
   } catch (err) {
     return res.status(401).json({ error: 'Login failed: ' + (err.message || err) });
   }
@@ -138,11 +549,11 @@ app.get('/api/message/:uid', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/me -> return basic account info + inbox stats
+// GET /api/me -> return basic account info + inbox stats + adminLevel from DB
 app.get('/api/me', authMiddleware, async (req, res) => {
   try {
     const email = req.user.email;
-    // derive a friendly display name from local part (john.doe -> John Doe)
+    // derive a friendly display name from local part
     const local = (email || '').split('@')[0] || '';
     const displayName = local
       .replace(/[._]/g, ' ')
@@ -158,11 +569,28 @@ app.get('/api/me', authMiddleware, async (req, res) => {
       total = (msgs && msgs.length) || 0;
       unread = (msgs && msgs.filter(m => !m.seen).length) || 0;
     } catch (e) {
-      // if IMAP fails, return counts as 0 but still return account info
       console.warn('Could not fetch inbox stats for', email, e.message || e);
     }
 
-    res.json({ email, displayName, inbox: { total, unread } });
+    // fetch admin level from hm_accounts (best-effort)
+    let adminLevel = 0;
+    try {
+      const r = await pool.query('SELECT accountadminlevel FROM hm_accounts WHERE accountaddress = $1 LIMIT 1', [email]);
+      if (r.rows && r.rows[0]) adminLevel = Number(r.rows[0].accountadminlevel || 0);
+    } catch (e) {
+      console.warn('Could not read accountadminlevel for', email, e && (e.message || e));
+    }
+
+    // fetch user settings (best-effort)
+    let settings = { outOfOffice: false, outOfOfficeReply: '', theme: 'system', appLock: false };
+    try {
+      const s = await getUserSettings(email);
+      if (s) settings = s;
+    } catch (e) {
+      console.warn('Could not read user settings for', email, e && (e.message || e));
+    }
+
+    res.json({ email, displayName, inbox: { total, unread }, adminLevel, settings });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Internal error' });
   }
@@ -511,5 +939,289 @@ app.delete('/api/schedule/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// DB helpers for user settings
+async function getUserSettings(email) {
+  try {
+    const r = await pool.query('SELECT out_of_office, out_of_office_reply, theme, app_lock FROM user_settings WHERE email = $1', [email]);
+    if (!r.rows || r.rows.length === 0) {
+      return { outOfOffice: false, outOfOfficeReply: '', theme: 'system', appLock: false };
+    }
+    const row = r.rows[0];
+    return {
+      outOfOffice: !!row.out_of_office,
+      outOfOfficeReply: row.out_of_office_reply || '',
+      theme: row.theme || 'system',
+      appLock: !!row.app_lock
+    };
+  } catch (err) {
+    console.warn('getUserSettings failed', err && (err.message || err));
+    return { outOfOffice: false, outOfOfficeReply: '', theme: 'system', appLock: false };
+  }
+}
+
+async function upsertUserSettings(email, { outOfOffice, outOfOfficeReply, theme, appLock }) {
+  try {
+    await pool.query(
+      `INSERT INTO user_settings(email, out_of_office, out_of_office_reply, theme, app_lock)
+       VALUES($1,$2,$3,$4,$5)
+       ON CONFLICT (email) DO UPDATE
+         SET out_of_office = EXCLUDED.out_of_office,
+             out_of_office_reply = EXCLUDED.out_of_office_reply,
+             theme = EXCLUDED.theme,
+             app_lock = EXCLUDED.app_lock`,
+      [email, !!outOfOffice, outOfOfficeReply || '', theme || 'system', !!appLock]
+    );
+  } catch (err) {
+    console.warn('upsertUserSettings failed', err && (err.message || err));
+    throw err;
+  }
+}
+
+// GET /api/settings -> return current user settings
+app.get('/api/settings', authMiddleware, async (req, res) => {
+  try {
+    const email = req.user.email;
+    const settings = await getUserSettings(email);
+    res.json({ success: true, settings });
+  } catch (err) {
+    console.error('GET /api/settings failed', err && (err.stack || err));
+    res.status(500).json({ error: 'Failed to read settings' });
+  }
+});
+
+// POST /api/settings -> update current user settings (body: { outOfOffice, outOfOfficeReply, theme, appLock })
+app.post('/api/settings', authMiddleware, async (req, res) => {
+  try {
+    const email = req.user.email;
+    const { outOfOffice, outOfOfficeReply, theme, appLock } = req.body || {};
+    await upsertUserSettings(email, { outOfOffice, outOfOfficeReply, theme, appLock });
+    const updated = await getUserSettings(email);
+    res.json({ success: true, settings: updated });
+  } catch (err) {
+    console.error('POST /api/settings failed', err && (err.stack || err));
+    res.status(500).json({ error: 'Failed to save settings' });
+  }
+});
+
 const port = process.env.PORT || 4000;
 app.listen(port, () => console.log(`Mail backend listening on ${port}`));
+
+// --- new: POST /api/admin/account { adminPassword, address, password, active?, maxSize? } ---
+app.post('/api/admin/account', authMiddleware, async (req, res) => {
+  if (!(await ensureAdminPermission(req, res))) return;
+  const { adminPassword, address, password: acctPassword, active = true, maxSize = 100 } = req.body || {};
+  if (!adminPassword || !address || !acctPassword) return res.status(400).json({ error: 'adminPassword, address and password required' });
+
+  // winax path
+  if (ActiveXObject) {
+    try {
+      const obApp = new ActiveXObject('hMailServer.Application');
+      obApp.Authenticate('Administrator', adminPassword);
+
+      // domain from address
+      const atIdx = address.indexOf('@');
+      if (atIdx === -1) return res.status(400).json({ error: 'invalid address' });
+      const domainName = address.slice(atIdx + 1);
+
+      const domain = obApp.Domains.ItemByName(domainName);
+      if (!domain) return res.status(404).json({ error: 'domain not found' });
+
+      const obAccount = domain.Accounts.Add();
+      obAccount.Address = address;
+      obAccount.Password = acctPassword;
+      obAccount.Active = !!active;
+      obAccount.MaxSize = Number(maxSize) || 100;
+      obAccount.Save();
+
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('admin create account (winax) failed', err && (err.message || err));
+      return res.status(500).json({ error: 'Failed to create account (COM error or invalid admin credentials)' });
+    }
+  }
+
+  // VBScript fallback
+  try {
+    const escAdmin = String(adminPassword).replace(/"/g,'""');
+    const escAddr = String(address).replace(/"/g,'""');
+    const escPass = String(acctPassword).replace(/"/g,'""');
+    const vb = `
+On Error Resume Next
+Set obApp = CreateObject("hMailServer.Application")
+obApp.Authenticate "Administrator", "${escAdmin}"
+If Err.Number <> 0 Then
+  WScript.StdErr.Write "AUTH_FAILED"
+  WScript.Quit 1
+End If
+Dim obDomain
+Set obDomain = obApp.Domains.ItemByName("${escAddr.split('@').slice(1).join('@')}")
+If Err.Number <> 0 Or IsNull(obDomain) Then
+  WScript.StdErr.Write "DOMAIN_NOT_FOUND"
+  WScript.Quit 2
+End If
+Dim obAccount
+Set obAccount = obDomain.Accounts.Add
+obAccount.Address = "${escAddr}"
+obAccount.Password = "${escPass}"
+obAccount.Active = ${active ? 'True' : 'False'}
+obAccount.MaxSize = ${Number(maxSize) || 100}
+obAccount.Save
+WScript.Echo "OK"
+`;
+    const lines = await runVbScriptAndCollect(vb);
+    if (lines.length && lines[0] === 'OK') return res.json({ success: true });
+    return res.status(500).json({ error: 'VBScript did not report success' });
+  } catch (e) {
+    console.error('admin create account (vbs) error', e && (e.message || e));
+    return res.status(500).json({ error: 'Failed to create account (cscript fallback failed): ' + (e && e.message) });
+  }
+});
+
+// POST /api/admin/account/:email/messages { adminPassword } -> list message headers for given account
+app.post('/api/admin/account/:email/messages', authMiddleware, async (req, res) => {
+  if (!(await ensureAdminPermission(req, res))) return;
+  const addr = req.params.email;
+  const { adminPassword } = req.body || {};
+  if (!adminPassword) return res.status(400).json({ error: 'adminPassword required' });
+  if (!addr) return res.status(400).json({ error: 'address required' });
+
+  // winax path
+  if (ActiveXObject) {
+    try {
+      const obApp = new ActiveXObject('hMailServer.Application');
+      obApp.Authenticate('Administrator', adminPassword);
+
+      const atIdx = addr.indexOf('@');
+      if (atIdx === -1) return res.status(400).json({ error: 'invalid address' });
+      const domainName = addr.slice(atIdx + 1);
+      const domain = obApp.Domains.ItemByName(domainName);
+      if (!domain) return res.status(404).json({ error: 'domain not found' });
+
+      const account = domain.Accounts.ItemByAddress(addr);
+      if (!account) return res.status(404).json({ error: 'account not found' });
+
+      const msgs = account.Messages;
+      const out = [];
+      // Messages is 0-based or 1-based depending on COM; iterate by index safely
+      const count = msgs.Count || 0;
+      for (let i = 0; i < count; i++) {
+        try {
+          const m = msgs.Item(i);
+          out.push({
+            id: m.ID || (m.ID === 0 ? 0 : null),
+            subject: m.Subject || '',
+            from: m.From || m.FromAddress || '',
+            to: (m.To || m.Recipients || ''),
+            date: m.Date || '',
+            size: m.Size || null
+          });
+        } catch (e) { /* ignore individual message errors */ }
+      }
+      return res.json({ success: true, messages: out });
+    } catch (err) {
+      console.error('admin/account/messages (winax) error', err && (err.message || err));
+      return res.status(500).json({ error: 'Failed to list messages (COM error or invalid admin password)' });
+    }
+  }
+
+  // VBScript fallback: echo lines "id|subject|from|to|date|size"
+  try {
+    const vb = `
+On Error Resume Next
+Set obApp = CreateObject("hMailServer.Application")
+obApp.Authenticate "Administrator", "${String(adminPassword).replace(/"/g,'""')}"
+If Err.Number <> 0 Then
+  WScript.StdErr.Write "AUTH_FAILED"
+  WScript.Quit 1
+End If
+Set obDomain = obApp.Domains.ItemByName("${String(addr).split('@').slice(1).join('@')}")
+If Err.Number <> 0 Or IsNull(obDomain) Then
+  WScript.StdErr.Write "DOMAIN_NOT_FOUND"
+  WScript.Quit 2
+End If
+Set obAccount = obDomain.Accounts.ItemByAddress("${String(addr).replace(/"/g,'""')}")
+If Err.Number <> 0 Or IsNull(obAccount) Then
+  WScript.StdErr.Write "ACCOUNT_NOT_FOUND"
+  WScript.Quit 3
+End If
+Set msgs = obAccount.Messages
+For i = 0 To msgs.Count - 1
+  Set m = msgs.Item(i)
+  ' id|subject|from|to|date|size
+  WScript.Echo m.ID & "|" & Replace(m.Subject, "|", " ") & "|" & Replace(m.From, "|", " ") & "|" & Replace(m.To, "|", " ") & "|" & CStr(m.Date) & "|" & CStr(m.Size)
+Next
+`;
+    const lines = await runVbScriptAndCollect(vb);
+    const messages = lines.map(l => {
+      const parts = l.split('|');
+      return {
+        id: parts[0] || null,
+        subject: parts[1] || '',
+        from: parts[2] || '',
+        to: parts[3] || '',
+        date: parts[4] || '',
+        size: parts[5] || null
+      };
+    });
+    return res.json({ success: true, messages });
+  } catch (e) {
+    console.error('admin/account/messages (vbs) error', e && (e.message || e));
+    return res.status(500).json({ error: 'Failed to list messages (cscript fallback failed): ' + (e && e.message) });
+  }
+});
+
+// --- new: POST /api/admin/backup { adminPassword } -> start hMailServer backup (no download) ---
+app.post('/api/admin/backup', authMiddleware, async (req, res) => {
+  if (!(await ensureAdminPermission(req, res))) return;
+  const { adminPassword } = req.body || {};
+  if (!adminPassword) return res.status(400).json({ error: 'adminPassword required' });
+
+  // winax path
+  if (ActiveXObject) {
+    try {
+      const obApp = new ActiveXObject('hMailServer.Application');
+      obApp.Authenticate('Administrator', adminPassword);
+      const bm = obApp.BackupManager;
+      if (!bm || typeof bm.StartBackup !== 'function') {
+        return res.status(500).json({ error: 'BackupManager not available on this hMailServer COM object' });
+      }
+      // StartBackup may be synchronous; call it and return success
+      bm.StartBackup();
+      return res.json({ success: true, info: 'Backup started' });
+    } catch (err) {
+      console.error('admin/backup (winax) error', err && (err.message || err));
+      return res.status(500).json({ error: 'Failed to start backup (COM error or invalid admin password)' });
+    }
+  }
+
+  // VBScript fallback: call BackupManager.StartBackup
+  try {
+    const vb = `
+On Error Resume Next
+Set obApp = CreateObject("hMailServer.Application")
+obApp.Authenticate "Administrator", "${String(adminPassword).replace(/"/g,'""')}"
+If Err.Number <> 0 Then
+  WScript.StdErr.Write "AUTH_FAILED"
+  WScript.Quit 1
+End If
+On Error Resume Next
+Set bm = obApp.BackupManager
+If Err.Number <> 0 Or IsNull(bm) Then
+  WScript.StdErr.Write "BACKUPMANAGER_NOT_FOUND"
+  WScript.Quit 2
+End If
+bm.StartBackup
+If Err.Number <> 0 Then
+  WScript.StdErr.Write "STARTBACKUP_FAILED"
+  WScript.Quit 3
+End If
+WScript.Echo "OK"
+`;
+    const lines = await runVbScriptAndCollect(vb);
+    if (lines.length && lines[0] === 'OK') return res.json({ success: true, info: 'Backup started' });
+    return res.status(500).json({ error: 'VBScript did not report success' });
+  } catch (e) {
+    console.error('admin/backup (vbs) error', e && (e.message || e));
+    return res.status(500).json({ error: 'Failed to start backup (cscript fallback failed): ' + (e && e.message) });
+  }
+});

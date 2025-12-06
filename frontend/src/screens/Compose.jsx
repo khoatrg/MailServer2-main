@@ -234,6 +234,12 @@ export default function Compose({ onSent, onCancel, noPortal = false, initialDat
 
     // If user chose "Send later" and provided a datetime, call schedule endpoint
     if (sendLater && scheduledAt) {
+      // scheduling attachments is not supported (files cannot be serialized into scheduled job)
+      if (attachments && attachments.length) {
+        setErr('Scheduling with attachments is not supported');
+        return;
+      }
+
       setScheduling(true);
       try {
         const to = finalRecipients.join(', ');
@@ -259,12 +265,15 @@ export default function Compose({ onSent, onCancel, noPortal = false, initialDat
       return;
     }
 
-    // immediate send (existing behavior)
+    // immediate send (include attachments)
     setSending(true);
     try {
       const to = finalRecipients.join(', ');
       const html = textToHtml(body);
-      const r = await sendMail({ to, subject, text: body, html });
+      // include attachments array (each item has .file) so api.sendMail can detect and build FormData
+      const payload = { to, subject, text: body, html };
+      if (attachments && attachments.length) payload.attachments = attachments; // attachments items: { file, name, size }
+      const r = await sendMail(payload);
       if (r.success) {
         setRecipients([]);
         setToInput('');

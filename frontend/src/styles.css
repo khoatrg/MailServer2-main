@@ -818,3 +818,113 @@ body{
   transition: background .18s ease;
 }
 
+/* Light theme overrides when html has class "light-theme" */
+.light-theme body {
+  background: linear-gradient(180deg,#ffffff 0%, #f7fafc 100%);
+  color: #0b1720;
+}
+.light-theme .app-root { background: #ffffff; }
+.light-theme .login-card,
+.light-theme .account-card,
+.light-theme .compose-modal,
+.light-theme .attachment-card,
+.light-theme .settings-row,
+.light-theme .message-item,
+.light-theme .compose-overlay,
+.light-theme .folder-dropdown .menu,
+.light-theme .folder-dropdown .trigger {
+  background: #ffffff;
+  color: #0b1720;
+  border-color: rgba(0,0,0,0.06);
+  box-shadow: 0 6px 18px rgba(2,6,8,0.04);
+}
+.light-theme .field-input,
+.light-theme .subject,
+.light-theme .settings-row,
+.light-theme .compose-body textarea {
+  background: #fbfeff;
+  color: #0b1720;
+  border:1px solid rgba(0,0,0,0.06);
+}
+.light-theme .settings-row-sub,
+.light-theme .account-email,
+.light-theme .attachment-size,
+.light-theme .message-preview,
+.light-theme .folder-dropdown .trigger .caret,
+.light-theme .bottom-nav .nav-item {
+  color: #58616b;
+}
+.light-theme .primary-btn {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(11,136,255,0.12);
+}
+.light-theme .details-inline-toolbar button {
+  border-color: rgba(8,18,23,0.06);
+  background: transparent;
+  color: #0b1720;
+}
+
+/* Lock overlay (used by App Lock). Theme-aware via .light-theme */
+.lock-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.lock-panel {
+  background: #071015;
+  padding: 20px;
+  border-radius: 10px;
+  width: 360px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  color: #e6eef1;
+}
+.lock-panel h3 { margin:0 0 8px 0; }
+.lock-panel .hint { color:#9aa6b2; margin-bottom:12px; }
+.lock-panel .lock-input {
+  width:100%;
+  padding:10px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.03);
+  margin-bottom:8px;
+  background: #071015;
+  color: #fff;
+}
+.lock-actions { display:flex; gap:8px; justify-content:flex-end; }
+
+/* buttons */
+.lock-signout {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: #e6eef1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.lock-unlock {
+  background: #0b88ff;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Light-theme overrides for lock overlay so buttons fit white theme */
+.light-theme .lock-overlay { background: rgba(0,0,0,0.06); }
+.light-theme .lock-panel {
+  background: #ffffff;
+  color: #0b1720;
+  border:1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 8px 24px rgba(2,6,8,0.06);
+}
+.light-theme .lock-panel .hint { color:#58616b; }
+.light-theme .lock-input { background:#fbfeff; color:#0b1720; border:1px solid rgba(0,0,0,0.06); }
+.light-theme .lock-signout { color:#0b1720; border:1px solid rgba(11,20,24,0.06); background:transparent; }
+.light-theme .lock-unlock { background:#0b88ff; color:#fff; }
+

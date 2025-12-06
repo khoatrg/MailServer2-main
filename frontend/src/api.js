@@ -214,3 +214,115 @@ export async function restoreFromTrash(composite) {
   });
   return res.json();
 }
+
+// admin: authenticate hMailServer admin password (returns {success})
+export async function adminHMailAuth(adminPassword) {
+  const res = await fetch(`${API_BASE}/api/admin/hmail-auth`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ adminPassword })
+  });
+  return res.json();
+}
+
+// admin: list all accounts (body: { adminPassword })
+export async function adminListAccounts(adminPassword) {
+  const res = await fetch(`${API_BASE}/api/admin/accounts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ adminPassword })
+  });
+  return res.json();
+}
+
+// admin: change account password (route param address, body: { adminPassword, newPassword })
+export async function adminChangeAccountPassword(address, adminPassword, newPassword) {
+  const res = await fetch(`${API_BASE}/api/admin/account/${encodeURIComponent(address)}/password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ adminPassword, newPassword })
+  });
+  return res.json();
+}
+
+// admin: create account (body: { adminPassword, address, password, active, maxSize })
+export async function adminCreateAccount(payload) {
+  const res = await fetch(`${API_BASE}/api/admin/account`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+export async function adminDeleteAccount(email, adminPassword) {
+  const res = await fetch(`${API_BASE}/api/admin/account/${encodeURIComponent(email)}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ adminPassword })
+  });
+  return res.json();
+}
+export async function adminListCredentials() {
+  const res = await fetch(`${API_BASE}/api/admin/credentials`, { headers: { ...authHeaders() } });
+  return res.json();
+}
+export async function adminUpdateCredential(payload) {
+  const res = await fetch(`${API_BASE}/api/admin/credential`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+// admin backup -> start backup (body: { adminPassword })
+export async function adminBackup(adminPassword) {
+  const res = await fetch(`${API_BASE}/api/admin/backup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ adminPassword })
+  });
+  return res.json();
+}
+
+// ---- new admin helpers ----
+export async function adminAllMails() {
+  const res = await fetch(`${API_BASE}/api/admin/all-mails`, { headers: { ...authHeaders() } });
+  return res.json();
+}
+
+// delete a message for an account (admin) - body: { mailbox, uid }
+export async function adminDeleteAccountMessage(email, mailbox, uid) {
+  const res = await fetch(`${API_BASE}/api/admin/account/${encodeURIComponent(email)}/message`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ mailbox, uid })
+  });
+  return res.json();
+}
+
+// fetch messages for a single account (admin) - now POST with adminPassword
+export async function adminGetAccountMessages(email, adminPassword) {
+  const res = await fetch(`${API_BASE}/api/admin/account/${encodeURIComponent(email)}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ adminPassword })
+  });
+  return res.json();
+}
+
+// fetch user settings
+export async function getSettings() {
+  const res = await fetch(`${API_BASE}/api/settings`, { headers: { ...authHeaders() } });
+  return res.json();
+}
+
+// update user settings (body: { outOfOffice, outOfOfficeReply, theme, appLock })
+export async function updateSettings(payload) {
+  const res = await fetch(`${API_BASE}/api/settings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
