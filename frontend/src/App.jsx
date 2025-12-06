@@ -234,7 +234,7 @@ export default function App() {
         {mode === 'settings' && <Settings onSignOut={logout} isAdmin={isAdmin} onNavigate={(m)=>setMode(m)} />}
         {mode === 'trash' && <Trash onOpenMessage={openMessage} onNavigate={(m)=>setMode(m)} />}
 
-        {isAdmin && mode === 'admin-accounts' && <AdminAccounts onNavigate={(m)=>{
+        {mode === 'admin-accounts' && <AdminAccounts onNavigate={(m)=>{
             // allow navigation string for account messages: 'admin-account-messages::email'
             if (typeof m === 'string' && m.startsWith('admin-account-messages::')) {
               const parts = m.split('::');
@@ -245,8 +245,8 @@ export default function App() {
             }
             setMode(m);
           }} />}
-        {isAdmin && mode === 'admin-create' && <AdminCreateAccount onNavigate={(m)=>setMode(m)} />}
-        {isAdmin && mode === 'admin-account-messages' && <AdminAccountMessages accountEmail={adminViewEmail} onNavigate={(m)=>setMode(m)} />}
+        {mode === 'admin-create' && <AdminCreateAccount onNavigate={(m)=>setMode(m)} />}
+        {mode === 'admin-account-messages' && <AdminAccountMessages accountEmail={adminViewEmail} onNavigate={(m)=>setMode(m)} />}
 
 
         {mode === 'view' && <EmailDetails
