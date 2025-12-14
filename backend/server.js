@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const multer = require('multer');
+const https = require('https');
 dotenv.config();
 
 const { listMessages, fetchMessage, sendMail, listAllMessages, searchMessagesByFrom, listMessagesFromBox, saveDraft, deleteMessage, getRawMessage, getAttachment, moveToTrash } = require('./mailService');
@@ -1004,7 +1005,18 @@ app.post('/api/settings', authMiddleware, async (req, res) => {
 });
 
 const port = process.env.PORT || 4000;
-app.listen(port, () => console.log(`Mail backend listening on ${port}`));
+const SSL_KEY = process.env.SSL_KEY_PATH;
+const SSL_CERT = process.env.SSL_CERT_PATH;
+
+if (SSL_KEY && SSL_CERT && fs.existsSync(SSL_KEY) && fs.existsSync(SSL_CERT)) {
+  const key = fs.readFileSync(SSL_KEY);
+  const cert = fs.readFileSync(SSL_CERT);
+  https.createServer({ key, cert }, app).listen(process.env.SSL_PORT || 443, () => {
+    console.log('HTTPS server listening on', process.env.SSL_PORT || 443);
+  });
+} else {
+  app.listen(process.env.PORT || 4000, () => console.log('HTTP server listening'));
+}
 
 // --- new: POST /api/admin/account { adminPassword, address, password, active?, maxSize? } ---
 app.post('/api/admin/account', authMiddleware, async (req, res) => {
