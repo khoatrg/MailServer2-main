@@ -1011,8 +1011,8 @@ const SSL_CERT = process.env.SSL_CERT_PATH;
 if (SSL_KEY && SSL_CERT && fs.existsSync(SSL_KEY) && fs.existsSync(SSL_CERT)) {
   const key = fs.readFileSync(SSL_KEY);
   const cert = fs.readFileSync(SSL_CERT);
-  https.createServer({ key, cert }, app).listen(process.env.SSL_PORT || 443, () => {
-    console.log('HTTPS server listening on', process.env.SSL_PORT || 443);
+  https.createServer({ key, cert }, app).listen(process.env.SSL_PORT, () => {
+    console.log('HTTPS server listening on', process.env.SSL_PORT);
   });
 } else {
   app.listen(process.env.PORT || 4000, () => console.log('HTTP server listening'));
