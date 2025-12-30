@@ -126,14 +126,14 @@ const listToRender = sortMessages(rawList, 'date', sortDir);
 
           <div style={{display:'flex', alignItems:'center'}}>
             {!showSearch ? (
-              <button style={{background:'transparent', border:'1px solid rgba(255,255,255,0.03)', padding:8, borderRadius:8, color:'#dff3ff', cursor:'pointer'}} onClick={() => { setShowSearch(true); setTimeout(()=>inputRef.current && inputRef.current.focus(),50); }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.35-4.35" stroke="#9aa6b2" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><circle cx="11" cy="11" r="6" stroke="#9aa6b2" strokeWidth="1.6"/></svg>
+              <button style={{background:'transparent', border:'1px solid rgba(0,0,0,0.08)', padding:8, borderRadius:8, color:'#202124', cursor:'pointer'}} onClick={() => { setShowSearch(true); setTimeout(()=>inputRef.current && inputRef.current.focus(),50); }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.35-4.35" stroke="#5f6368 " strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><circle cx="11" cy="11" r="6" stroke="#5f6368 " strokeWidth="1.6"/></svg>
               </button>
             ) : (
-              <div style={{display:'flex', alignItems:'center', gap:8, padding:'4px 6px', background:'#071015', border:'1px solid rgba(255,255,255,0.03)', borderRadius:8}}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.35-4.35" stroke="#9aa6b2" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><circle cx="11" cy="11" r="6" stroke="#9aa6b2" strokeWidth="1.6"/></svg>
-                <input ref={inputRef} value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} onKeyDown={onSearchKey} placeholder="Search subject, email, or content" style={{padding:'8px 10px', borderRadius:6, border:'none', background:'transparent', color:'#dff3ff', outline:'none', width:300, maxWidth:'40vw'}} />
-                <button onClick={()=>{ setShowSearch(false); setSearchQuery(''); setSearchResults(null); }} title="Close search" style={{background:'transparent', border:'none', color:'#9aa6b2', cursor:'pointer'}}>✕</button>
+              <div style={{display:'flex', alignItems:'center', gap:8, padding:'4px 6px', background:'#fff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:8}}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.35-4.35" stroke="#5f6368 " strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><circle cx="11" cy="11" r="6" stroke="#5f6368 " strokeWidth="1.6"/></svg>
+                <input ref={inputRef} value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} onKeyDown={onSearchKey} placeholder="Search subject, email, or content" style={{padding:'8px 10px', borderRadius:6, border:'none', background:'transparent', color:'#202124', outline:'none', width:300, maxWidth:'40vw'}} />
+                <button onClick={()=>{ setShowSearch(false); setSearchQuery(''); setSearchResults(null); }} title="Close search" style={{background:'transparent', border:'none', color:'#5f6368 ', cursor:'pointer'}}>✕</button>
               </div>
             )}
           </div>

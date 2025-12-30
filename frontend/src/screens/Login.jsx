@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { login, setToken } from '../api';
-import { FingerprintPattern, Container, Rabbit  } from 'lucide-react';
+import { Key, Container, Rabbit  } from 'lucide-react';
 
 
 
@@ -84,10 +84,6 @@ export default function Login({ onLogin }) {
                         </button>
                     </div>
 
-                    <div className="forgot-row">
-                        <a className="forgot-link" href="#" onClick={e => e.preventDefault()}>Forgot Password?</a>
-                    </div>
-
                     {error && <div className="error-text">{error}</div>}
 
                     <button className="primary-btn" type="submit" disabled={loading}>
@@ -97,7 +93,7 @@ export default function Login({ onLogin }) {
                     <div className="or-row"><span className="line" /> <span>OR</span> <span className="line" /></div>
 
                     <button type="button" className="biometric-btn" aria-label="Sign in with biometrics">
-                        <FingerprintPattern size={25} style={{ marginRight: 8 }} />Sign in with Biometrics
+                        <Key size={25} style={{ marginRight: 8 }} />Sign in with Passkey
                     </button>
 
                     <p className="terms">By signing in, you agree to our <a href="#">Terms of Service</a>.</p>

@@ -5,6 +5,13 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const multer = require('multer');
 const https = require('https');
+const rateLimit = require('express-rate-limit');
+
+const chatLimiter = rateLimit({
+  windowMs: 30*1000, // 30s window
+  max: 6,            // max 6 requests per window per IP (adjust as needed)
+  message: { error: 'Too many chat/context requests, try later.' }
+});
 dotenv.config();
 
 const { listMessages, fetchMessage, sendMail, listAllMessages, searchMessagesByFrom, listMessagesFromBox, saveDraft, deleteMessage, getRawMessage, getAttachment, moveToTrash } = require('./mailService');
@@ -985,6 +992,7 @@ async function getUserSettings(email) {
 
 async function upsertUserSettings(email, { outOfOffice, outOfOfficeReply, theme, appLock }) {
   try {
+    // 1. Update user_settings table (custom settings)
     await pool.query(
       `INSERT INTO user_settings(email, out_of_office, out_of_office_reply, theme, app_lock)
        VALUES($1,$2,$3,$4,$5)
@@ -995,6 +1003,28 @@ async function upsertUserSettings(email, { outOfOffice, outOfOfficeReply, theme,
              app_lock = EXCLUDED.app_lock`,
       [email, !!outOfOffice, outOfOfficeReply || '', theme || 'system', !!appLock]
     );
+
+    // 2. Sync Out of Office to hMailServer's hm_accounts table
+    // accountvacationmessageon: 1 = enabled, 0 = disabled
+    // accountvacationmessage: the auto-reply message text
+    try {
+      await pool.query(
+        `UPDATE hm_accounts 
+         SET accountvacationmessageon = $1,
+             accountvacationmessage = $2
+         WHERE LOWER(accountaddress) = LOWER($3)`,
+        [
+          outOfOffice ? 1 : 0,
+          outOfOfficeReply || '',
+          email
+        ]
+      );
+      console.log(`[OutOfOffice] Synced to hm_accounts for ${email}: enabled=${!!outOfOffice}`);
+    } catch (hmErr) {
+      // Log but don't fail the whole operation if hm_accounts update fails
+      console.warn('Failed to sync out-of-office to hm_accounts:', hmErr && (hmErr.message || hmErr));
+    }
+
   } catch (err) {
     console.warn('upsertUserSettings failed', err && (err.message || err));
     throw err;
@@ -1298,5 +1328,72 @@ app.delete('/api/admin/sessions/:jti', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('admin/delete-session error', err && (err.stack || err));
     res.status(500).json({ error: 'Failed to delete session' });
+  }
+});
+
+// POST /api/chat/context
+// body: { mailbox?: string, limit?: number, includeBodies?: boolean, maxChars?: number }
+app.post('/api/chat/context', authMiddleware, chatLimiter, async (req, res) => {
+  try {
+    const email = req.user.email;
+    const password = req.user.password;
+    const mailbox = req.body.mailbox || 'INBOX';
+    const limit = Math.min(Number(req.body.limit) || 20, 100); // cap 100
+    const includeBodies = !!req.body.includeBodies;
+    const maxChars = Math.min(Number(req.body.maxChars) || 1000, 5000); // cap per body
+
+    // use mailService.listMessagesFromBox to get headers + uid
+    const msgs = await listMessagesFromBox(email, password, mailbox);
+    // sort by date desc and take limit
+    const recent = (msgs || []).sort((a,b) => {
+      const da = Date.parse(a.date || 0), db = Date.parse(b.date || 0);
+      return db - da;
+    }).slice(0, limit);
+
+    // if includeBodies -> fetch each message (careful, do sequential to avoid IMAP overload)
+    const out = [];
+    for (const m of recent) {
+      const item = {
+        uid: m.uid,
+        mailbox: m.mailbox || mailbox,
+        from: m.from,
+        to: m.to,
+        subject: m.subject,
+        date: m.date,
+        snippet: (m.subject || '') + ' — ' + ((m.from || '') + '')
+      };
+      if (includeBodies) {
+        try {
+          const full = await fetchMessage(email, password, String(m.uid), m.mailbox || mailbox);
+          // truncate body
+          const bodyText = (full && (full.text || full.html || '')) || '';
+          item.body = bodyText.length > maxChars ? (bodyText.slice(0, maxChars) + '...') : bodyText;
+        } catch (e) {
+          item.body = '';
+        }
+      }
+      out.push(item);
+    }
+    return res.json({ success: true, mailbox, messages: out });
+  } catch (err) {
+    console.error('/api/chat/context error', err && (err.stack || err));
+    return res.status(500).json({ error: 'Failed to load mailbox context' });
+  }
+});
+
+// GET /api/chat/message/:uid -> full message
+app.get('/api/chat/message/:uid', authMiddleware, chatLimiter, async (req, res) => {
+  try {
+    const uid = req.params.uid;
+    const mailbox = req.query.mailbox || 'INBOX';
+    if (!uid) return res.status(400).json({ error: 'uid required' });
+    const email = req.user.email;
+    const password = req.user.password;
+    const msg = await fetchMessage(email, password, String(uid), mailbox);
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+    return res.json({ success: true, message: msg });
+  } catch (err) {
+    console.error('/api/chat/message/:uid error', err && (err.stack || err));
+    return res.status(500).json({ error: 'Failed to fetch message' });
   }
 });

@@ -3,7 +3,7 @@ import { Inbox } from 'lucide-react';
 import { Send } from 'lucide-react';
 import { SquarePen } from 'lucide-react';
 import { Settings } from 'lucide-react';
-
+import { MessageSquare } from 'lucide-react';
 
 export default function BottomNav({ active = 'inbox', onNavigate }) {
   return (
@@ -14,18 +14,28 @@ export default function BottomNav({ active = 'inbox', onNavigate }) {
       >
         <Inbox />        <span>Inbox</span>
       </button>
+
       <button
         className={`nav-item ${active === 'sent' ? 'active' : ''}`}
         onClick={() => onNavigate && onNavigate('sent')}
       >
         <Send />        <span>Sent</span>
       </button>
+
       <button
         className={`nav-item ${active === 'drafts' ? 'active' : ''}`}
         onClick={() => onNavigate && onNavigate('drafts')}
       >
         <SquarePen />        <span>Drafts</span>
       </button>
+
+      <button
+        className={`nav-item ${active === 'chat' ? 'active' : ''}`}
+        onClick={() => onNavigate && onNavigate('chat')}
+      >
+        <MessageSquare />  <span>Chat With AI</span>
+      </button>
+
       <button
         className={`nav-item ${active === 'settings' ? 'active' : ''}`}
         onClick={() => onNavigate && onNavigate('settings')}

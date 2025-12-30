@@ -15,6 +15,8 @@ import AdminAccounts from './screens/AdminAccounts';
 import AdminCreateAccount from './screens/AdminCreateAccount';
 import AdminAccountMessages from './screens/AdminAccountMessages';
 import AdminSessions from './screens/AdminSessions';
+import Chat from './components/Chat';
+
 
 export default function App() {
   const [mode, setMode] = useState('login'); // login | inbox | compose | sent | drafts | settings | view
@@ -28,6 +30,7 @@ export default function App() {
   const [locked, setLocked] = useState(false);
   const [userSettings, setUserSettings] = useState(null);
   const [adminViewEmail, setAdminViewEmail] = useState(null);
+  const [forwardData, setForwardData] = useState(null);
 
   useEffect(()=> {
     async function init() {
@@ -240,6 +243,7 @@ export default function App() {
         {mode === 'drafts' && <Drafts onOpenMessage={openMessage} seenOverrides={seenOverrides} />}
         {mode === 'settings' && <Settings onSignOut={logout} isAdmin={isAdmin} onNavigate={(m)=>setMode(m)} />}
         {mode === 'trash' && <Trash onOpenMessage={openMessage} onNavigate={(m)=>setMode(m)} />}
+        {mode === 'chat' && <Chat defaultModel="Llama-3.8B-Instruct-q4f32_1-MLC-1k" />}
 
         {mode === 'admin-accounts' && <AdminAccounts onNavigate={(m)=>{
             // allow navigation string for account messages: 'admin-account-messages::email'
