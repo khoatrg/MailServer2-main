@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { listMessages, getMessage, moveToTrash } from '../api';
+import { sortMessages } from '../utils/sortMessages';
 
 export default function Inbox({ onOpenCompose, onOpenMessage, seenOverrides, onNavigate }) {
   const [messages, setMessages] = useState([]);
@@ -10,6 +11,7 @@ export default function Inbox({ onOpenCompose, onOpenMessage, seenOverrides, onN
   const [showSearch, setShowSearch] = useState(false);
   const inputRef = useRef(null);
   const searchTimer = useRef(null);
+  const [sortDir, setSortDir] = useState('desc'); // 'desc' = newest first
 
   async function load() {
     const r = await listMessages();
@@ -99,8 +101,8 @@ export default function Inbox({ onOpenCompose, onOpenMessage, seenOverrides, onN
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, showSearch]);
 
-  const listToRender = (searchResults !== null || searching || showSearch) ? (searchResults || []) : messages;
-  const PAGE_SIZE = 7;
+const rawList = (searchResults !== null || searching || showSearch) ? (searchResults || []) : messages;
+const listToRender = sortMessages(rawList, 'date', sortDir);  const PAGE_SIZE = 7;
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [messages.length, searchResults, searching, showSearch]);
   const totalPages = Math.max(1, Math.ceil((listToRender && listToRender.length) / PAGE_SIZE));
@@ -170,7 +172,12 @@ export default function Inbox({ onOpenCompose, onOpenMessage, seenOverrides, onN
             </div>
           )}
         </div>
-
+          <div className="sort-select-wrapper">
+  <select className="sort-select" value={sortDir} onChange={e => setSortDir(e.target.value)} aria-label="Sort messages">
+    <option value="desc">Newest first</option>
+    <option value="asc">Oldest first</option>
+  </select>
+</div>
         <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:12}}>
           {/* pagination next to search */}
           <div>

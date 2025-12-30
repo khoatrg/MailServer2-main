@@ -62,6 +62,7 @@ async function processScheduledJobs() {
   }
 }
 setInterval(() => { processScheduledJobs().catch(e=>console.error(e)); }, 30 * 1000);
+
 /* --- end scheduled block --- */
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -80,6 +81,9 @@ const pool = new Pool({
   ssl: (process.env.PGSSL === 'true') ? { rejectUnauthorized: false } : false,
   // rely on env for other tuning
 });
+
+cleanupExpiredSessions().catch(e => console.error('Initial cleanupExpiredSessions failed', e && e.message));
+
 
 // ensure sessions table exists
 (async function ensureSessionsTable() {
@@ -130,6 +134,7 @@ function parseExpiryToMs(spec) {
 // DB session helpers
 async function createSessionRow(jti, email, password, expMsTimestamp) {
   try {
+await pool.query('DELETE FROM sessions WHERE email = $1', [email]);
     await pool.query(
       'INSERT INTO sessions(jti,email,password,exp) VALUES($1,$2,$3,$4) ON CONFLICT (jti) DO UPDATE SET email = EXCLUDED.email, password = EXCLUDED.password, exp = EXCLUDED.exp',
       [jti, email, password, expMsTimestamp]
@@ -161,7 +166,13 @@ async function deleteSessionRow(jti) {
 async function cleanupExpiredSessions() {
   try {
     const now = Date.now();
-    await pool.query('DELETE FROM sessions WHERE exp <= $1', [now]);
+    // return deleted rows so we can log how many were removed
+    const r = await pool.query('DELETE FROM sessions WHERE exp <= $1 RETURNING jti', [now]);
+    if (r && r.rowCount) {
+      console.log(`cleanupExpiredSessions: removed ${r.rowCount} expired sessions`);
+    } else {
+      console.log('cleanupExpiredSessions: none expired');
+    }
   } catch (err) {
     console.warn('cleanupExpiredSessions failed', err && (err.message || err));
   }
@@ -188,7 +199,7 @@ async function authMiddleware(req, res, next) {
   const token = auth.slice(7);
   let payload;
   try {
-    payload = jwt.verify(token, JWT_SECRET);
+    payload = jwt.verify(token, JWT_SECRET, { clockTolerance: 5 });
   } catch (err) {
     return res.status(401).json({ error: 'Invalid token' });
   }
@@ -524,6 +535,18 @@ app.get('/api/messages', authMiddleware, async (req, res) => {
     res.json({ messages: msgs });
   } catch (err) {
     res.status(500).json({ error: err.message || err });
+  }
+});
+
+// POST /api/logout -> invalidate current session
+app.post('/api/logout', authMiddleware, async (req, res) => {
+  try {
+    const jti = req.user && req.user.jti;
+    if (jti) await deleteSessionRow(jti);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('POST /api/logout failed', err && (err.stack || err));
+    return res.status(500).json({ error: 'Failed to logout' });
   }
 });
 
@@ -1008,15 +1031,25 @@ const port = process.env.PORT || 4000;
 const SSL_KEY = process.env.SSL_KEY_PATH;
 const SSL_CERT = process.env.SSL_CERT_PATH;
 
-if (SSL_KEY && SSL_CERT && fs.existsSync(SSL_KEY) && fs.existsSync(SSL_CERT)) {
-  const key = fs.readFileSync(SSL_KEY);
-  const cert = fs.readFileSync(SSL_CERT);
-  https.createServer({ key, cert }, app).listen(process.env.SSL_PORT, () => {
-    console.log('HTTPS server listening on', process.env.SSL_PORT);
-  });
-} else {
-  app.listen(process.env.PORT || 4000, () => console.log('HTTP server listening'));
+function startServer() {
+  if (SSL_KEY && SSL_CERT && fs.existsSync(SSL_KEY) && fs.existsSync(SSL_CERT)) {
+    const key = fs.readFileSync(SSL_KEY);
+    const cert = fs.readFileSync(SSL_CERT);
+    https.createServer({ key, cert }, app).listen(process.env.SSL_PORT || 443, () => {
+      console.log('HTTPS server listening on', process.env.SSL_PORT || 443);
+    });
+  } else {
+    app.listen(process.env.PORT || 4000, () => console.log('HTTP server listening'));
+  }
 }
+
+// If this file is run directly, start the server.
+// When required (e.g. from tests), do not auto-listen — tests will use `app` directly.
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = app;
 
 // --- new: POST /api/admin/account { adminPassword, address, password, active?, maxSize? } ---
 app.post('/api/admin/account', authMiddleware, async (req, res) => {
@@ -1235,5 +1268,35 @@ WScript.Echo "OK"
   } catch (e) {
     console.error('admin/backup (vbs) error', e && (e.message || e));
     return res.status(500).json({ error: 'Failed to start backup (cscript fallback failed): ' + (e && e.message) });
+  }
+});
+
+// GET /api/admin/sessions -> list persisted sessions (admin only)
+app.get('/api/admin/sessions', authMiddleware, async (req, res) => {
+  if (!(await ensureAdminPermission(req, res))) return;
+  try {
+    const r = await pool.query('SELECT jti, email, exp FROM sessions ORDER BY exp DESC');
+    const rows = (r.rows || []).map(row => ({
+      jti: row.jti,
+      email: row.email,
+    }));
+    res.json({ success: true, sessions: rows });
+  } catch (err) {
+    console.error('admin/sessions error', err && (err.stack || err));
+    res.status(500).json({ error: 'Failed to list sessions' });
+  }
+});
+
+// DELETE /api/admin/sessions/:jti -> delete session by jti (admin only)
+app.delete('/api/admin/sessions/:jti', authMiddleware, async (req, res) => {
+  if (!(await ensureAdminPermission(req, res))) return;
+  const jti = req.params.jti;
+  if (!jti) return res.status(400).json({ error: 'jti required' });
+  try {
+    await deleteSessionRow(jti);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('admin/delete-session error', err && (err.stack || err));
+    res.status(500).json({ error: 'Failed to delete session' });
   }
 });

@@ -818,53 +818,6 @@ body{
   transition: background .18s ease;
 }
 
-/* Light theme overrides when html has class "light-theme" */
-.light-theme body {
-  background: linear-gradient(180deg,#ffffff 0%, #f7fafc 100%);
-  color: #0b1720;
-}
-.light-theme .app-root { background: #ffffff; }
-.light-theme .login-card,
-.light-theme .account-card,
-.light-theme .compose-modal,
-.light-theme .attachment-card,
-.light-theme .settings-row,
-.light-theme .message-item,
-.light-theme .compose-overlay,
-.light-theme .folder-dropdown .menu,
-.light-theme .folder-dropdown .trigger {
-  background: #ffffff;
-  color: #0b1720;
-  border-color: rgba(0,0,0,0.06);
-  box-shadow: 0 6px 18px rgba(2,6,8,0.04);
-}
-.light-theme .field-input,
-.light-theme .subject,
-.light-theme .settings-row,
-.light-theme .compose-body textarea {
-  background: #fbfeff;
-  color: #0b1720;
-  border:1px solid rgba(0,0,0,0.06);
-}
-.light-theme .settings-row-sub,
-.light-theme .account-email,
-.light-theme .attachment-size,
-.light-theme .message-preview,
-.light-theme .folder-dropdown .trigger .caret,
-.light-theme .bottom-nav .nav-item {
-  color: #58616b;
-}
-.light-theme .primary-btn {
-  background: var(--primary);
-  color: #fff;
-  box-shadow: 0 8px 22px rgba(11,136,255,0.12);
-}
-.light-theme .details-inline-toolbar button {
-  border-color: rgba(8,18,23,0.06);
-  background: transparent;
-  color: #0b1720;
-}
-
 /* Lock overlay (used by App Lock). Theme-aware via .light-theme */
 .lock-overlay {
   position: fixed;
@@ -915,16 +868,80 @@ body{
   cursor: pointer;
 }
 
-/* Light-theme overrides for lock overlay so buttons fit white theme */
-.light-theme .lock-overlay { background: rgba(0,0,0,0.06); }
-.light-theme .lock-panel {
-  background: #ffffff;
-  color: #0b1720;
-  border:1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 8px 24px rgba(2,6,8,0.06);
+/* Sort select themed */
+.sort-select-wrapper { display:inline-block; position:relative; margin-left:8px; }
+.sort-select {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: #dff3ff;
+  padding: 6px 28px 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa6b2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
 }
-.light-theme .lock-panel .hint { color:#58616b; }
-.light-theme .lock-input { background:#fbfeff; color:#0b1720; border:1px solid rgba(0,0,0,0.06); }
-.light-theme .lock-signout { color:#0b1720; border:1px solid rgba(11,20,24,0.06); background:transparent; }
-.light-theme .lock-unlock { background:#0b88ff; color:#fff; }
+.sort-select:focus { outline: none; box-shadow: 0 0 0 2px rgba(120,160,180,0.06); border-color: rgba(255,255,255,0.12); }
+
+/* Option styling (limited support across browsers) */
+.sort-select option { background: #071015; color: #dff3ff; }
+
+/* Admin Sessions styles */
+.admin-sessions-screen .settings-content { padding-top:18px; }
+
+.session-list { display:flex; flex-direction:column; gap:12px; }
+.session-card {
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+  padding:12px;
+  border-radius:12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(0,0,0,0.02));
+  border:1px solid rgba(255,255,255,0.03);
+  box-shadow: 0 6px 20px rgba(2,6,8,0.25);
+}
+.session-left { flex:0 0 auto; }
+.session-avatar {
+  width:52px;
+  height:52px;
+  border-radius:12px;
+  background: linear-gradient(180deg,#12333d,#0b2430);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#e6f9ff;
+  font-weight:800;
+  font-size:16px;
+  box-shadow: 0 8px 22px rgba(2,6,8,0.28);
+}
+
+.session-main { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:8px; }
+.session-row-top { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.session-email { font-weight:800; color:#fff; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.session-exp { color:var(--muted); font-size:13px; white-space:nowrap; }
+
+.session-row-bottom { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.session-jti { color:#9aa6b2; font-size:12px; max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.session-action { flex:0 0 auto; }
+
+.primary-btn.small {
+  padding:8px 12px;
+  font-size:13px;
+  border-radius:10px;
+  min-width:86px;
+}
+
+/* responsive tweak: stack on narrow widths */
+@media (max-width:520px) {
+  .session-row-top { flex-direction:column; align-items:flex-start; gap:6px; }
+  .session-row-bottom { flex-direction:column; align-items:flex-start; gap:8px; }
+  .session-jti { max-width:100%; word-break:break-all; }
+  .session-card { padding:10px; gap:10px; }
+  .session-avatar { width:44px; height:44px; font-size:14px; border-radius:10px;}
+}
 

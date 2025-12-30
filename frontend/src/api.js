@@ -326,3 +326,26 @@ export async function updateSettings(payload) {
   });
   return res.json();
 }
+
+export async function LOGOUT() {
+  const res = await fetch(`${API_BASE}/api/logout`, {
+    method: 'POST',
+    headers: { ...authHeaders() }
+  });
+  return res.json();
+}
+
+// admin: list active sessions (returns { success, sessions: [{ jti, email, exp, expiresAt }] })
+export async function adminListSessions() {
+  const res = await fetch(`${API_BASE}/api/admin/sessions`, { headers: { ...authHeaders() } });
+  return res.json();
+}
+
+// admin: delete session by jti
+export async function adminDeleteSession(jti) {
+  const res = await fetch(`${API_BASE}/api/admin/sessions/${encodeURIComponent(jti)}`, {
+    method: 'DELETE',
+    headers: { ...authHeaders() }
+  });
+  return res.json();
+}

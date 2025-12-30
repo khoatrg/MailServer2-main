@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { setToken, getToken, clearToken, isTokenExpired, getMessage, moveToTrash, deleteMessagePermanent, deleteScheduledJob, getSettings, updateSettings, login, getMe } from './api';
+import { setToken, getToken, clearToken, isTokenExpired, getMessage, moveToTrash, deleteMessagePermanent, deleteScheduledJob, getSettings, updateSettings, login, getMe, LOGOUT } from './api';
 import Login from './screens/Login';
 import Inbox from './screens/Inbox';
 import Compose from './screens/Compose';
@@ -14,6 +14,7 @@ import FloatingCompose from './components/FloatingCompose';
 import AdminAccounts from './screens/AdminAccounts';
 import AdminCreateAccount from './screens/AdminCreateAccount';
 import AdminAccountMessages from './screens/AdminAccountMessages';
+import AdminSessions from './screens/AdminSessions';
 
 export default function App() {
   const [mode, setMode] = useState('login'); // login | inbox | compose | sent | drafts | settings | view
@@ -142,10 +143,16 @@ export default function App() {
     );
   }
 
-  function logout() {
-    clearToken();
-    setMode('login');
-  }
+  async function logout() {
+  try {
+    const token = getToken();
+    if (token) {
+      await LOGOUT();
+    }
+  } catch(e) { /* ignore */ }
+  clearToken();
+  setMode('login');
+}
 
   async function openMessage(uid) {
     // remember where we came from so EmailDetails can navigate back
@@ -247,6 +254,7 @@ export default function App() {
           }} />}
         {mode === 'admin-create' && <AdminCreateAccount onNavigate={(m)=>setMode(m)} />}
         {mode === 'admin-account-messages' && <AdminAccountMessages accountEmail={adminViewEmail} onNavigate={(m)=>setMode(m)} />}
+          {mode === 'admin-sessions' && <AdminSessions onNavigate={(m)=>setMode(m)} />}
 
 
         {mode === 'view' && <EmailDetails

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getDraftMessages, getMessage, deleteDraftMessage } from '../api';
 import Compose from './Compose'; // open compose inline when user picks a draft
+import { sortMessages } from '../utils/sortMessages';
 
 export default function Drafts({ onOpenMessage, seenOverrides }) {
   const [messages, setMessages] = useState([]);
@@ -16,6 +17,8 @@ export default function Drafts({ onOpenMessage, seenOverrides }) {
   const inputRef = useRef(null);
   const searchTimer = useRef(null);
 
+  const [sortDir, setSortDir] = useState('desc'); // 'desc' = newest first
+  
   async function load() {
     const r = await getDraftMessages();
     setMessages(r.messages || []);
@@ -135,7 +138,8 @@ export default function Drafts({ onOpenMessage, seenOverrides }) {
     return d.toLocaleDateString();
   }
 
-  const listToRender = (searchResults !== null || searching || showSearch) ? (searchResults || []) : messages;
+  const rawList = (searchResults !== null || searching || showSearch) ? (searchResults || []) : messages;
+const listToRender = sortMessages(rawList, 'date', sortDir);
   const PAGE_SIZE = 7;
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [messages.length, searchResults, searching, showSearch]);
@@ -156,6 +160,13 @@ export default function Drafts({ onOpenMessage, seenOverrides }) {
     <div className="inbox-screen">
       <header className="inbox-header">
         <h1>Drafts</h1>
+
+        <div className="sort-select-wrapper">
+  <select className="sort-select" value={sortDir} onChange={e => setSortDir(e.target.value)} aria-label="Sort messages">
+    <option value="desc">Newest first</option>
+    <option value="asc">Oldest first</option>
+  </select>
+</div>
 
         <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:12}}>
           <div>

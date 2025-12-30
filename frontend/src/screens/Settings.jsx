@@ -127,6 +127,14 @@ export default function Settings({ onSignOut, isAdmin, onNavigate }) {
                 <div className="settings-row-right">›</div>
               </button>
 
+              <button className="settings-row" onClick={() => onNavigate && onNavigate('admin-sessions')}>
+  <div className="settings-row-left">
+    <div className="settings-row-label">Active Sessions</div>
+    <div className="settings-row-sub">View and revoke user sessions</div>
+  </div>
+  <div className="settings-row-right">›</div>
+</button>
+
               <div className="settings-row" onClick={startBackup} style={{cursor:'pointer'}}>
                 <div className="settings-row-left">
                   <div className="settings-row-label">Start Backup</div>

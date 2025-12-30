@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSentMessages, getMessage } from '../api';
+import { sortMessages } from '../utils/sortMessages';
 
 export default function Sent({ onOpenMessage, seenOverrides }) {
   const [messages, setMessages] = useState([]);
@@ -10,6 +11,7 @@ export default function Sent({ onOpenMessage, seenOverrides }) {
   const [searching, setSearching] = useState(false);
   const inputRef = useRef(null);
   const searchTimer = useRef(null);
+  const [sortDir, setSortDir] = useState('desc'); // 'desc' = newest first
 
   async function load() {
     const r = await getSentMessages();
@@ -92,7 +94,8 @@ export default function Sent({ onOpenMessage, seenOverrides }) {
     return d.toLocaleDateString();
   }
 
-  const listToRender = (searchResults !== null || searching || showSearch) ? (searchResults || []) : messages;
+  const rawList = (searchResults !== null || searching || showSearch) ? (searchResults || []) : messages;
+const listToRender = sortMessages(rawList, 'date', sortDir);
   const PAGE_SIZE = 7;
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [messages.length, searchResults, searching, showSearch]);
@@ -104,6 +107,13 @@ export default function Sent({ onOpenMessage, seenOverrides }) {
       <header className="inbox-header">
         <h1>Sent</h1>
 
+        <div className="sort-select-wrapper">
+  <select className="sort-select" value={sortDir} onChange={e => setSortDir(e.target.value)} aria-label="Sort messages">
+    <option value="desc">Newest first</option>
+    <option value="asc">Oldest first</option>
+  </select>
+</div>
+
         <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:12}}>
           <div>
             <div className="pagination-inline" role="navigation" aria-label="Pagination">
@@ -112,6 +122,7 @@ export default function Sent({ onOpenMessage, seenOverrides }) {
               <button className="pagination-btn" onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page>=totalPages}>Next</button>
             </div>
           </div>
+          
 
           <div style={{display:'flex', alignItems:'center'}}>
             {!showSearch ? (

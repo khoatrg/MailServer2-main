@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { getScheduledJobs, deleteScheduledJob } from '../api';
+import { sortMessages } from '../utils/sortMessages';
 
 export default function Scheduled({ onNavigate, onOpenScheduled }) {
   const [jobs, setJobs] = useState([]);
@@ -12,6 +13,7 @@ export default function Scheduled({ onNavigate, onOpenScheduled }) {
   const [searching, setSearching] = useState(false);
   const inputRef = useRef(null);
   const searchTimer = useRef(null);
+  const [sortDir, setSortDir] = useState('desc'); // 'desc' = newest first
 
   async function load() {
     setLoading(true);
@@ -30,7 +32,8 @@ export default function Scheduled({ onNavigate, onOpenScheduled }) {
   const PAGE_SIZE = 7;
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [jobs.length, searchResults, searching, showSearch]);
-  const listToRender = (searchResults !== null || searching || showSearch) ? (searchResults || []) : jobs;
+  const rawList = (searchResults !== null || searching || showSearch) ? (searchResults || []) : jobs;
+const listToRender = sortMessages(rawList, 'date', sortDir);
   const totalPages = Math.max(1, Math.ceil((listToRender && listToRender.length) / PAGE_SIZE));
   const paginated = (listToRender || []).slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -148,6 +151,13 @@ export default function Scheduled({ onNavigate, onOpenScheduled }) {
             </div>
           )}
         </div>
+
+        <div className="sort-select-wrapper">
+  <select className="sort-select" value={sortDir} onChange={e => setSortDir(e.target.value)} aria-label="Sort messages">
+    <option value="desc">Newest first</option>
+    <option value="asc">Oldest first</option>
+  </select>
+</div>
 
         <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:12}}>
           <div>
