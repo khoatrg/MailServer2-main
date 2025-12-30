@@ -670,7 +670,7 @@ export default function EmailDetails({ message, onBack, onReply, onReplyAll, onF
       )}
 
       <div className="details-header">
-        <button className="back-btn" onClick={() => { if (onBack) return onBack(); if (onNavigate) return onNavigate('inbox'); }}>←</button>
+        <button className="back-btn" onClick={() => { if (onBack) return onBack(); if (onNavigate) return onNavigate('sent'); }}>←</button>
         <div className="details-actions">
           <button
             title="Print"

@@ -102,6 +102,34 @@ export async function sendMail(payload) {
 
 // schedule a mail to be sent later (payload: { to, subject, text, html, sendAt })
 export async function scheduleMail(payload) {
+  const hasFiles = payload && payload.attachments && payload.attachments.length;
+  
+  if (hasFiles) {
+    // Use FormData for attachments
+    const form = new FormData();
+    form.append('to', payload.to || '');
+    form.append('subject', payload.subject || '');
+    form.append('text', payload.text || '');
+    form.append('html', payload.html || '');
+    form.append('sendAt', payload.sendAt || '');
+    
+    // Attachments array may be Files or objects with .file
+    for (const a of payload.attachments) {
+      const fileObj = a instanceof File ? a : (a && a.file) ? a.file : null;
+      if (fileObj) {
+        form.append('attachments', fileObj, fileObj.name || (a.name || 'attachment'));
+      }
+    }
+    
+    const res = await fetch(`${API_BASE}/api/schedule`, {
+      method: 'POST',
+      headers: { ...authHeaders() }, // Don't set Content-Type, let browser set multipart boundary
+      body: form
+    });
+    return res.json();
+  }
+  
+  // Fallback: JSON body (no attachments)
   const res = await fetch(`${API_BASE}/api/schedule`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },

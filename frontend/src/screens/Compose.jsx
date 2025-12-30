@@ -208,14 +208,24 @@ export default function Compose({ onSent, onCancel, noPortal = false, initialDat
     const bodyText = getEditorText();
 
     if (sendLater && scheduledAt) {
-      if (attachments && attachments.length) {
-        setErr('Scheduling with attachments is not supported');
-        return;
-      }
+      // NOW SUPPORTS ATTACHMENTS - removed the block
       setScheduling(true);
       try {
         const to = finalRecipients.join(', ');
-        const r = await scheduleMail({ to, subject, text: bodyText, html: bodyHtml, sendAt: new Date(scheduledAt).toISOString() });
+        const payload = { 
+          to, 
+          subject, 
+          text: bodyText, 
+          html: bodyHtml, 
+          sendAt: new Date(scheduledAt).toISOString() 
+        };
+        
+        // Include attachments if any
+        if (attachments && attachments.length) {
+          payload.attachments = attachments;
+        }
+        
+        const r = await scheduleMail(payload);
         if (r && r.success) {
           setRecipients([]); setToInput(''); setSubject(''); 
           if (editorRef.current) editorRef.current.innerHTML = '';

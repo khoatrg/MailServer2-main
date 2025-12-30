@@ -237,7 +237,7 @@ export default function App() {
         {mode === 'login' && <Login onLogin={()=>setMode('inbox')} />}
 
         {mode === 'inbox' && <Inbox onOpenCompose={()=>setMode('compose')} onOpenMessage={openMessage} seenOverrides={seenOverrides} onNavigate={(m)=>setMode(m)} />}
-        {mode === 'scheduled' && <Scheduled onNavigate={(m)=>setMode(m)} onOpenScheduled={(job)=>openScheduledJob(job)} />}
+        {mode === 'scheduled' && <Scheduled onNavigate={(m) => setMode(m)} />}
         {mode === 'compose' && <Compose onSent={()=>setMode('inbox')} onCancel={()=>setMode('inbox')} />}
         {mode === 'sent' && <Sent onOpenMessage={openMessage} seenOverrides={seenOverrides} />}
         {mode === 'drafts' && <Drafts onOpenMessage={openMessage} seenOverrides={seenOverrides} />}

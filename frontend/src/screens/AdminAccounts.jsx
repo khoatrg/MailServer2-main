@@ -5,15 +5,13 @@ export default function AdminAccounts({ onNavigate }) {
   const [adminPassword, setAdminPassword] = useState('');
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [editing, setEditing] = useState({}); // { address: newPassword }
+  const [editing, setEditing] = useState({});
   const [message, setMessage] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const hdrRef = useRef(null);
 
   useEffect(() => {
-    // ensure the screen has helpful info on mount
     if (!message) setMessage('Enter the hMailServer administrator password and click "List Accounts".');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -77,7 +75,6 @@ export default function AdminAccounts({ onNavigate }) {
     }
   }
 
-   // dropdown state
   const [folderOpen, setFolderOpen] = useState(false);
   const folderRef = useRef(null);
   useEffect(() => {
@@ -95,52 +92,144 @@ export default function AdminAccounts({ onNavigate }) {
   }
 
   return (
-    <div className="settings-screen">
-      <header className="settings-header" ref={hdrRef}>
+    <div className="admin-screen">
+      <header className="admin-header" ref={hdrRef}>
         <button className="back-btn" onClick={() => onNavigate && onNavigate('inbox')}>‹</button>
-        <div style={{display:'flex', alignItems:'center', gap:8}}>
+        <div className="admin-header-center">
           <div className="folder-dropdown" ref={folderRef}>
-          <button className="trigger" onClick={() => setFolderOpen(s => !s)} aria-haspopup="menu" aria-expanded={folderOpen}>
-            Admin — Accounts <span className="caret">▾</span>
-          </button>
-          {folderOpen && (
-            <div className="menu" role="menu">
-              <div className="item" role="menuitem" onClick={() => goFolder('admin-create')}>Create Account</div>
-              <div className="item" role="menuitem" onClick={() => loadAccounts()}>Refresh List</div>
-            </div>
-          )}
+            <button className="trigger" onClick={() => setFolderOpen(s => !s)} aria-haspopup="menu" aria-expanded={folderOpen}>
+              Accounts <span className="caret">▾</span>
+            </button>
+            {folderOpen && (
+              <div className="menu" role="menu">
+                <div className="item" role="menuitem" onClick={() => goFolder('admin-create')}>
+                  Create Account
+                </div>
+                <div className="item" role="menuitem" onClick={() => goFolder('admin-sessions')}>
+                  Sessions
+                </div>
+                <div className="divider"></div>
+                <div className="item" role="menuitem" onClick={() => loadAccounts()}>
+                  Refresh List
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        </div>
-        <div style={{width:36}} />
+        <div style={{ width: 36 }} />
       </header>
 
-      <div className="settings-content">
-        <div className="section">
-          <div className="section-title">HMailServer Admin</div>
-          <div style={{display:'flex', gap:8, alignItems:'center'}}>
-            <input value={adminPassword} onChange={e=>setAdminPassword(e.target.value)} type="password" placeholder="hMailServer admin password" style={{flex:1, padding:8, borderRadius:8, border:'1px solid rgba(255,255,255,0.04)', background:'#071015', color:'#dff3ff'}} />
-            <button className="primary-btn" onClick={loadAccounts} disabled={!adminPassword || loading}>{loading ? 'Loading…' : 'List Accounts'}</button>
+      <div className="admin-content">
+        {/* Auth Card */}
+        <div className="admin-card">
+          <div className="admin-card-header">
+            <h3>hMailServer Authentication</h3>
           </div>
-          {message && <div style={{color:'#ffb3b3', marginTop:8}}>{message}</div>}
+          <div className="admin-card-body">
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <input 
+                value={adminPassword} 
+                onChange={e => setAdminPassword(e.target.value)} 
+                type="password" 
+                placeholder="Enter admin password" 
+                className="admin-input"
+                style={{ flex: 1 }}
+              />
+              <button 
+                className="admin-btn primary" 
+                onClick={loadAccounts} 
+                disabled={!adminPassword || loading}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                {loading ? 'Loading...' : 'List Accounts'}
+              </button>
+            </div>
+            {message && (
+              <div className={`admin-message ${message.includes('Error') || message.includes('Failed') ? 'error' : 'info'}`} style={{ marginTop: 12 }}>
+                {message}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="section">
-          <div className="section-title">Accounts</div>
-          {accounts.length === 0 && <div className="settings-row">No accounts loaded</div>}
-          {accounts.map(a => (
-            <div key={a.address} className="settings-row" style={{alignItems:'center'}}>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:800}}>{a.address}</div>
-                <div style={{color:'#9aa6b2', fontSize:13}}>{a.domain}</div>
+        {/* Accounts List */}
+        <div className="admin-card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          <div className="admin-card-header">
+            <h3>Email Accounts</h3>
+            <span className="admin-badge">{accounts.length}</span>
+          </div>
+          <div className="admin-card-body" style={{ padding: 0, flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            {accounts.length === 0 ? (
+              <div className="admin-empty">
+                <div className="admin-empty-icon">📭</div>
+                <p>No accounts loaded</p>
+                <span>Enter admin password and click "List Accounts" to view</span>
               </div>
-              <div style={{display:'flex', gap:8, alignItems:'center'}}>
-                <input value={editing[a.address]||''} onChange={e=>setEditing(prev=>({ ...prev, [a.address]: e.target.value }))} placeholder="new password" style={{padding:8, borderRadius:8, border:'1px solid rgba(255,255,255,0.04)', background:'#071015', color:'#dff3ff'}} />
-                <button className="primary-btn" style={{padding:'8px 10px', minWidth:100}} onClick={()=>changePassword(a.address)} disabled={!adminPassword || loading}>Change</button>
-                <button className="list-delete-btn" title="Delete account" onClick={()=>deleteAccount(a.address)} disabled={!adminPassword || loading} style={{marginLeft:4}}>Delete</button>
-                <button className="settings-row" style={{marginLeft:6, padding:'6px 8px'}} onClick={() => { if (onNavigate) onNavigate('admin-account-messages::' + encodeURIComponent(a.address)); }} disabled={!adminPassword || loading}>View</button>
+            ) : (
+              <div className="admin-table-wrapper">
+                <div className="admin-table">
+                  <div className="admin-table-header">
+                    <div className="col-account">Account</div>
+                    <div className="col-domain">Domain</div>
+                    <div className="col-password">New Password</div>
+                    <div className="col-actions">Actions</div>
+                  </div>
+                  <div className="admin-table-body">
+                    {accounts.map(a => (
+                      <div key={a.address} className="admin-table-row">
+                        <div className="col-account">
+                          <div className="account-avatar">
+                            {(a.address || '').split('@')[0].slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="account-info">
+                            <span className="account-email">{a.address}</span>
+                          </div>
+                        </div>
+                        <div className="col-domain">
+                          <span className="domain-badge">{a.domain}</span>
+                        </div>
+                        <div className="col-password">
+                          <input 
+                            value={editing[a.address] || ''} 
+                            onChange={e => setEditing(prev => ({ ...prev, [a.address]: e.target.value }))} 
+                            placeholder="••••••••" 
+                            type="password"
+                            className="admin-input small"
+                          />
+                        </div>
+                        <div className="col-actions">
+                          <button 
+                            className="admin-btn small primary" 
+                            onClick={() => changePassword(a.address)} 
+                            disabled={!adminPassword || loading}
+                            title="Change Password"
+                          >
+                            Change
+                          </button>
+                          <button 
+                            className="admin-btn small secondary"
+                            onClick={() => { if (onNavigate) onNavigate('admin-account-messages::' + encodeURIComponent(a.address)); }}
+                            disabled={!adminPassword || loading}
+                            title="View Messages"
+                          >
+                            View
+                          </button>
+                          <button 
+                            className="admin-btn small danger" 
+                            onClick={() => deleteAccount(a.address)} 
+                            disabled={!adminPassword || loading}
+                            title="Delete Account"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            )}
+          </div>
         </div>
       </div>
     </div>

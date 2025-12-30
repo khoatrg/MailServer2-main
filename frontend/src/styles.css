@@ -1253,3 +1253,939 @@ button {
   outline: none;
   border-color: #1a73e8 !important;
 }
+
+/* ...existing code... */
+
+/* ===== Admin Pages Styles ===== */
+.admin-screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgb(255, 255, 255);
+  color: #0e0d0d;
+}
+
+.admin-header .back-btn {
+  color: #0e0d0d;
+  background: rgba(255,255,255,0.1);
+}
+
+.admin-header .back-btn:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.admin-header-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-header-center h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #0e0d0d;
+}
+
+.admin-header .folder-dropdown .trigger {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #030303;
+}
+
+.admin-header .folder-dropdown .trigger:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+.admin-header .folder-dropdown .menu {
+  margin-top: 8px;
+}
+
+.admin-header .folder-dropdown .menu .divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.admin-header .folder-dropdown .menu .menu-icon {
+  margin-right: 8px;
+}
+
+.admin-icon {
+  font-size: 18px;
+  margin-right: 4px;
+}
+
+.admin-header-badge {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.admin-content {
+  padding: 20px;
+  padding-bottom: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg);
+}
+
+/* Admin Cards */
+.admin-card {
+  background: var(--card);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.admin-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-card-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
+.admin-card-icon {
+  font-size: 18px;
+}
+
+.admin-card-body {
+  padding: 20px;
+}
+
+.admin-badge {
+  background: var(--primary);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Admin Input */
+.admin-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.admin-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(26,115,232,0.12);
+}
+
+.admin-input.small {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.admin-input-group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.admin-input-group .admin-input {
+  flex: 1;
+  min-width: 0; /* Quan trọng để input có thể co lại */
+}
+
+/* Thêm style cho auth card body */
+.admin-auth-card .admin-card-body {
+  padding: 20px;
+}
+
+/* Đảm bảo card-body luôn hiển thị */
+.admin-card > .admin-card-body {
+  display: block;
+}
+
+/* Admin Buttons */
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.admin-btn.primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.admin-btn.primary:hover:not(:disabled) {
+  background: #1557b0;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(26,115,232,0.25);
+}
+
+.admin-btn.secondary {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.admin-btn.secondary:hover:not(:disabled) {
+  background: var(--hover-bg);
+}
+
+.admin-btn.danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.admin-btn.danger:hover:not(:disabled) {
+  background: #f8d7da;
+  transform: translateY(-1px);
+}
+
+.admin-btn.small {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.admin-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-icon {
+  font-size: 14px;
+}
+
+/* Spinner */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-spinner.large {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-radius: 50%;
+  border-top-color: var(--primary);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Admin Messages */
+.admin-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+.admin-message.info {
+  background: #e8f0fe;
+  color: #1a73e8;
+  border: 1px solid #d2e3fc;
+}
+
+.admin-message.error {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid #f5c6cb;
+}
+
+.admin-message.success {
+  background: #e6f4ea;
+  color: #137333;
+  border: 1px solid #ceead6;
+}
+
+.admin-message .msg-icon {
+  font-weight: 700;
+}
+
+/* Admin Empty State */
+.admin-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+}
+
+.admin-empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.admin-empty p {
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.admin-empty span {
+  font-size: 13px;
+}
+
+/* Admin Loading */
+.admin-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--muted);
+}
+
+.admin-loading p {
+  margin-top: 16px;
+}
+
+/* Admin Table */
+.admin-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-table-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.admin-table-row {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.admin-table-row:last-child {
+  border-bottom: none;
+}
+
+.admin-table-row:hover {
+  background: var(--hover-bg);
+}
+
+.col-account {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.col-domain {
+  flex: 1;
+  min-width: 0;
+}
+
+.col-password {
+  flex: 1.5;
+  min-width: 0;
+}
+
+.col-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+}
+
+.account-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4285f4, #34a853);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.account-avatar.large {
+  width: 56px;
+  height: 56px;
+  font-size: 18px;
+}
+
+.account-info {
+  min-width: 0;
+}
+
+.account-email {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.domain-badge {
+  display: inline-block;
+  background: var(--surface-2);
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Admin Form */
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.admin-form-group.half {
+  flex: 1;
+}
+
+.admin-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.admin-form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* Admin Toggle */
+.admin-toggle-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.admin-toggle {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+}
+
+.admin-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.admin-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #dadce0;
+  border-radius: 26px;
+  transition: 0.3s;
+}
+
+.admin-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: 0.3s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.admin-toggle input:checked + .admin-toggle-slider {
+  background: #34a853;
+}
+
+.admin-toggle input:checked + .admin-toggle-slider:before {
+  transform: translateX(22px);
+}
+
+.admin-toggle-label {
+  font-size: 14px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.admin-toggle-label.active {
+  color: #34a853;
+}
+
+/* Admin Account Info */
+.admin-account-info .admin-card-body {
+  padding: 16px 20px;
+}
+
+.account-info-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.account-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.account-email-large {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.account-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Admin Messages List */
+.admin-messages-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-message-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-message-item:last-child {
+  border-bottom: none;
+}
+
+.admin-message-item .message-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.admin-message-item .message-row:hover {
+  background: var(--hover-bg);
+}
+
+.admin-message-item .message-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ea4335, #fbbc04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.admin-message-item .message-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-message-item .message-subject {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-message-item .message-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.admin-message-item .meta-separator {
+  opacity: 0.5;
+}
+
+.admin-message-item .message-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.admin-message-item .message-date {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.admin-message-item .expand-icon {
+  font-size: 12px;
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+
+.admin-message-item .expand-icon.open {
+  transform: rotate(180deg);
+}
+
+.admin-message-item .message-details {
+  padding: 16px 20px 20px 64px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+}
+
+.admin-message-item .detail-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.admin-message-item .detail-label {
+  font-weight: 600;
+  color: var(--text);
+  min-width: 50px;
+}
+
+.admin-message-item .detail-value {
+  color: var(--muted);
+}
+
+.admin-message-item .detail-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #e8f0fe;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #1a73e8;
+  margin-top: 12px;
+}
+
+.admin-message-item .note-icon {
+  flex-shrink: 0;
+}
+
+/* Admin Sessions Grid */
+.admin-sessions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.admin-session-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+
+.admin-session-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transform: translateY(-2px);
+}
+
+.admin-session-card .session-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-session-card .session-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4285f4, #34a853);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.admin-session-card .session-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-session-card .session-email {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-session-card .session-jti {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: monospace;
+}
+
+.admin-session-card .session-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--surface-2);
+}
+
+.admin-session-card .session-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-session-card .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34a853;
+}
+
+.admin-session-card .session-status.expired .status-dot {
+  background: var(--danger);
+}
+
+.admin-session-card .session-status.expiring .status-dot {
+  background: #fbbc04;
+}
+
+.admin-session-card .status-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.admin-session-card .status-time {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+/* Responsive Admin */
+@media (max-width: 768px) {
+  .admin-table-header {
+    display: none;
+  }
+
+  .admin-table-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .col-account,
+  .col-domain,
+  .col-password,
+  .col-actions {
+    flex: 1;
+  }
+
+  .col-actions {
+    flex-wrap: wrap;
+  }
+
+  .admin-form-row {
+    flex-direction: column;
+  }
+
+  .admin-sessions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-table-wrapper {
+  display: flex;
+  flex-direction: column;
+  max-height: 400px;
+  overflow: hidden;
+}
+
+.admin-table {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.admin-table-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.admin-table-body {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 350px;
+}
+
+/* Custom scrollbar for table */
+.admin-table-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-table-body::-webkit-scrollbar-track {
+  background: var(--surface-2);
+}
+
+.admin-table-body::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.admin-table-body::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* ===== Admin Sessions with Scroll ===== */
+.admin-sessions-wrapper {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  padding: 20px;
+  max-height: 450px;
+  overflow-y: auto;
+}
+
+/* Custom scrollbar for sessions */
+.admin-sessions-wrapper::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-sessions-wrapper::-webkit-scrollbar-track {
+  background: var(--surface-2);
+  border-radius: 4px;
+}
+
+.admin-sessions-wrapper::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.admin-sessions-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* ===== Admin Messages List with Scroll ===== */
+.admin-messages-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.admin-messages-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-messages-list::-webkit-scrollbar-track {
+  background: var(--surface-2);
+}
+
+.admin-messages-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.admin-messages-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

@@ -42,7 +42,6 @@ export default function AdminSessions({ onNavigate }) {
     }
   }
 
-  // Format time same as Sent screen: show HH:MM if within 24h, otherwise date
   function formatTime(dateInput) {
     if (!dateInput && dateInput !== 0) return '';
     const d = (typeof dateInput === 'number') ? new Date(dateInput) : new Date(dateInput);
@@ -55,54 +54,85 @@ export default function AdminSessions({ onNavigate }) {
     return d.toLocaleDateString();
   }
 
+  function getTimeStatus(dateInput) {
+    if (!dateInput && dateInput !== 0) return 'unknown';
+    const d = (typeof dateInput === 'number') ? new Date(dateInput) : new Date(dateInput);
+    if (isNaN(d.getTime())) return 'unknown';
+    const now = new Date();
+    const diff = d - now;
+    if (diff < 0) return 'expired';
+    if (diff < 1000 * 60 * 60) return 'expiring';
+    return 'active';
+  }
+
   return (
-    <div className="admin-sessions-screen settings-screen">
-      <header className="settings-header">
-        <button className="back-btn" onClick={() => onNavigate && onNavigate('settings')} aria-label="Back">‹</button>
-        <h1>Active Sessions</h1>
-        <div style={{width:36}} />
+    <div className="admin-screen">
+      <header className="admin-header">
+        <button className="back-btn" onClick={() => onNavigate && onNavigate('admin-accounts')} aria-label="Back">‹</button>
+        <div className="admin-header-center">
+          <h1>Active Sessions</h1>
+        </div>
+        <div style={{ width: 36 }} />
       </header>
 
-      <div className="settings-content">
-        {err && <div className="error-text">{err}</div>}
+      <div className="admin-content">
+        {err && <div className="admin-message error">{err}</div>}
+        
         {loading ? (
-          <div style={{padding:20}}>Loading…</div>
+          <div className="admin-loading">
+            <div className="loading-spinner large"></div>
+            <p>Loading sessions...</p>
+          </div>
         ) : (
-          <>
-            {sessions.length === 0 ? (
-              <div style={{padding:20, color:'var(--muted)'}}>No active sessions found.</div>
-            ) : (
-              <div className="session-list">
-                {sessions.map(s => (
-                  <div className="session-card" key={s.jti}>
-                    <div className="session-left">
-                      <div className="session-avatar">{(s.email||'').split('@')[0].slice(0,2).toUpperCase()}</div>
-                    </div>
-
-                    <div className="session-main">
-                      <div className="session-row-top">
-                        <div className="session-email" title={s.email}>{s.email}</div>
-                        <div className="session-exp">{formatTime(s.exp || s.expiresAt)}</div>
-                      </div>
-
-                      <div className="session-row-bottom">
-                        <div className="session-jti" title={s.jti}>{s.jti}</div>
-                        <div className="session-action">
+          <div className="admin-card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            <div className="admin-card-header">
+              <h3>Sessions</h3>
+              <span className="admin-badge">{sessions.length}</span>
+            </div>
+            <div className="admin-card-body" style={{ padding: 0, flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              {sessions.length === 0 ? (
+                <div className="admin-empty">
+                  <div className="admin-empty-icon">🔒</div>
+                  <p>No active sessions found</p>
+                </div>
+              ) : (
+                <div className="admin-sessions-wrapper">
+                  {sessions.map(s => {
+                    const status = getTimeStatus(s.exp || s.expiresAt);
+                    return (
+                      <div className="admin-session-card" key={s.jti}>
+                        <div className="session-header">
+                          <div className="session-avatar">
+                            {(s.email || '').split('@')[0].slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="session-info">
+                            <span className="session-email" title={s.email}>{s.email}</span>
+                            <span className="session-jti" title={s.jti}>ID: {s.jti.slice(0, 12)}...</span>
+                          </div>
+                        </div>
+                        <div className="session-footer">
+                          <div className={`session-status ${status}`}>
+                            <span className="status-dot"></span>
+                            <span className="status-label">
+                              {status === 'expired' ? 'Expired' : status === 'expiring' ? 'Expiring soon' : 'Active'}
+                            </span>
+                            <span className="status-time">{formatTime(s.exp || s.expiresAt)}</span>
+                          </div>
                           <button
-                            className="primary-btn small"
+                            className="admin-btn small danger"
                             onClick={() => handleDelete(s.jti)}
                             disabled={busyJti === s.jti}
                           >
-                            {busyJti === s.jti ? 'Deleting…' : 'Delete'}
+                            {busyJti === s.jti ? 'Revoking...' : 'Revoke'}
                           </button>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>
